@@ -122,6 +122,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
   <div class="mult" id="mult">1,00×</div>
   <div class="fig"><canvas id="chart"></canvas></div>
   <div class="params" id="params"></div>
+  <div class="params" style="margin-top:6px"><b>Warum gerade kein Kauf?</b> <span id="why">–</span></div>
 </section>
 
 <div class="stats">
@@ -455,40 +456,42 @@ async function tick(){
     const md=items.length?await market(items):{};
     for(const p of ps)checkPos(p,md[p.key]);
     S.agent.risk=S.agent.risk||'überwacht Positionen';
-    const lines=[],best={};
+    const lines=[],best={},why={};for(const k of SK)why[k]={};let stage={total:0,young:0,liq:0,sec:0,passed:0};
     const F=(w,cls,txt,imp)=>lines.push({imp,cls,msg:`${CHAINS[w.chain].tag} $${w.sym} · ${txt}`});
     for(const w of Object.values(S.watch)){
-      const d=md[w.key];
+      stage.total++;const d=md[w.key];
       if(!d){if(now()-w.first>20*60000){F(w,'k','keine Marktdaten → raus',1);kill(w.key,'dead','keine Marktdaten')}else F(w,'i','warte auf Marktdaten…');continue}
       w.sym=d.sym||w.sym;w.liq=d.liq;w.created=d.created||w.first;
       const age=now()-w.created,info=`Liq ${kfmt(d.liq)} $ · ${mins(age)} · 1h ${pct(d.ch1,0)}`;
       if(age>st.maxAgeMin*60000){F(w,'k',`${info} → zu alt, raus`,1);kill(w.key,'old',`kein Signal nach ${mins(age)}`);continue}
       if(d.ch1>st.maxPump){F(w,'k',`${info} → schon gepumpt, raus`,1);kill(w.key,'pump',`schon ${pct(d.ch1,0)} in 1 h`);continue}
-      if(d.liq<MIN_LIQ){if(age>15*60000){F(w,'k',`${info} → Liq zu niedrig, raus`,1);kill(w.key,'liq',`Liq ${kfmt(d.liq)} $ < ${kfmt(MIN_LIQ)} $`)}else F(w,'i',`${info} → wartet auf Liq`);continue}
-      if(age<MIN_AGE*60000){F(w,'i',`${info} → zu jung, wartet`);continue}
+      if(d.liq<MIN_LIQ){if(age>15*60000){F(w,'k',`${info} → Liq zu niedrig, raus`,1);kill(w.key,'liq',`Liq ${kfmt(d.liq)} $ < ${kfmt(MIN_LIQ)} $`)}else F(w,'i',`${info} → wartet auf Liq`);stage.liq++;continue}
+      if(age<MIN_AGE*60000){F(w,'i',`${info} → zu jung, wartet`);stage.young++;continue}
       if(age>10*60000&&d.b5+d.s5<5){F(w,'k',`${info} → kaum Handel, raus`,1);kill(w.key,'dead',`nur ${d.b5+d.s5} Trades in 5 min`);continue}
       w.ready=true;
       const v=verdict(w);
-      if(v.wait){F(w,'s',`${info} → Sicherheitscheck läuft…`);continue}
+      if(v.wait){F(w,'s',`${info} → Sicherheitscheck läuft…`);stage.sec++;continue}
       if(v.rule){F(w,'k',`${RULES[v.rule]} → raus`,1);kill(w.key,v.rule,v.d);continue}
       if(!w.passed){w.passed=true;bump(w.chain,'pass');log('i',`FILTER [${CHAINS[w.chain].tag}]: $${w.sym} bestanden · Liq ${kfmt(d.liq)} $`);F(w,'b','Sicherheitscheck bestanden ✓',1)}
-      w.lh=(w.lh||[]).concat(d.liq).slice(-6);
+      stage.passed++;w.lh=(w.lh||[]).concat(d.liq).slice(-6);
       w.score=analyse(d,v.score);w.sig=w.sig||{};w.bought=w.bought||{};
       const sigs=[];
       for(const k of SK){const P=STRATS[k],a=S.acc[k];
-        if(w.bought[k]||a.paused)continue;
-        const blk=entryBlock(P,w,d,age,w.score);
+        if(a.paused)continue;if(w.bought[k]){why[k]['schon gekauft']=(why[k]['schon gekauft']||0)+1;continue}
+        const blk=entryBlock(P,w,d,age,w.score);if(blk)why[k][blk]=(why[k][blk]||0)+1;else if(w.sig[k]+1<P.confirm)why[k]['Signal wird bestätigt']=(why[k]['Signal wird bestätigt']||0)+1;
         w.sig[k]=blk?0:(w.sig[k]||0)+1;
         if(!blk){sigs.push(`${P.name} ${w.sig[k]}/${P.confirm}`);
           if(w.sig[k]>=P.confirm&&(!best[k]||w.score>best[k].s))best[k]={w,d,s:w.score,v}}}
       F(w,sigs.length?'b':'a',`Score ${w.score}${sigs.length?' · Signal: '+sigs.join(', '):''}`,sigs.length>0);
       S.agent.analyst=`$${w.sym} score ${w.score}`;
       if(SK.every(k=>w.bought[k])){delete S.watch[w.key];S.seen[w.key]=now()}}
+    for(const k of SK)if(best[k]&&S.acc[k].positions.length>=STRATS[k].maxOpen)why[k]['alle Plätze belegt']=1;
     for(const k of SK){const b=best[k];if(b&&S.acc[k].positions.length<STRATS[k].maxOpen&&!S.acc[k].positions.some(p=>p.key===b.w.key))buy(k,b.w,b.d,b.s,b.v)}
     const imp=lines.filter(l=>l.imp),rest=lines.filter(l=>!l.imp);
     const take=Math.max(0,14-imp.length),off=rest.length?(feedRot+=take)%rest.length:0;
     [...imp,...rest.slice(off,off+take),...rest.slice(0,Math.max(0,off+take-rest.length))].sort(()=>Math.random()-0.5).forEach(l=>feed(l.cls,l.msg));
     feed('i',`Runde fertig · ${Object.keys(S.watch).length} auf Watchlist · ${allPos().length} offen`);
+    S.why=why;S.stage=stage;
     security();brakeCheck();
     for(const k of SK){const a=S.acc[k];a.equity.push([now(),equityOf(a)]);if(a.equity.length>1500)a.equity.splice(0,a.equity.length-1500)}
     S.agent.logger=`${S.logs.length} Einträge`;
@@ -514,6 +517,14 @@ function render(){
   $('pnl').textContent=`${pnl>=0?'+':''}${eur(pnl)} (${pct(pnl/start*100)})`;$('pnl').className='pnl '+(pnl>=0?'up':'down');
   $('mult').textContent=m.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+'×';$('mult').className='mult'+(m<1?' neg':'');
   $('params').innerHTML=(P.mode==='dip'?'Kauft, wenn 1h zwischen <b>+30 und +200 %</b> und 5 Min. zwischen <b>−3 und −15 %</b> (Dip), Käufer ≥ Verkäufer':`Kauft ab Score <b>${P.minScore}</b>, <b>${P.confirm}</b> Runden bestätigt, nicht über <b>+${P.maxCh5} %</b> in 5 Min.`)+` · Liq ≥ <b>${kfmt(P.minLiq)} $</b> · Alter ≥ <b>${P.minAgeMin} Min.</b> · Stop <b>−${P.sl} %</b> · Trailing ab <b>+${P.trailStart} %</b> mit <b>${P.trail} %</b> · TP <b>+${P.tp} %</b> · max. <b>${P.maxHoldMin} Min.</b> · Liq-Exit <b>−${P.liqExit} %</b>`;
+  {const st=S.stage,wy=S.why&&S.why[k];let t='';
+    if(a.paused)t='Pausiert.';
+    else if(!S.running)t='Bot ist pausiert – auf Start tippen.';
+    else if(!st)t='Erste Runde läuft…';
+    else if(!st.total)t='Watchlist ist leer – Scout findet gerade keine neuen Tokens. Datenquellen oben prüfen.';
+    else if(!st.passed)t=`Von ${st.total} Tokens auf der Watchlist hat gerade keiner alle Sicherheitsregeln geschafft (${st.young} zu jung, ${st.liq} zu wenig Liquidität, ${st.sec} im Sicherheitscheck). Das ist normal – meistens Müll.`;
+    else{const e=Object.entries(wy||{}).sort((p,q)=>q[1]-p[1]);t=`${st.passed} Tokens haben die Sicherheit bestanden. `+(e.length?'Kein Kauf, weil: '+e.map(([r,n])=>`${r} (${n}×)`).join(' · '):'Kaufsignal steht – Kauf in der nächsten Runde.')}
+    $('why').textContent=t}
   $('sScan').textContent=S.cnt.scan.toLocaleString('de-DE');$('sRej').textContent=S.cnt.rej.toLocaleString('de-DE');
   $('sPass').textContent=S.cnt.pass.toLocaleString('de-DE');$('sTrade').textContent=SK.reduce((s,x)=>s+S.acc[x].trades,0).toLocaleString('de-DE');
   $('runTxt').textContent=S.running?'Live · Paper':'Pausiert';$('runDot').className='dot '+(S.running?'ok':'wait');
