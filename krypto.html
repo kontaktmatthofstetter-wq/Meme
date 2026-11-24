@@ -208,7 +208,7 @@ const STRATS={
   lev:{name:'Hebel Long/Short',color:'#ff8a5b',desc:'Trendfolge mit Hebel, Long und Short, 1 % Risiko pro Trade',maxHold:90}};
 const FFEE=0.0005,FUND=0.0001,MMR=0.005;
 const SK=Object.keys(STRATS);
-const DEF={capital:100,lossStop:30,lev:3,risk:1,coins:{BTC:true,ETH:true,SOL:true,BNB:true,XRP:true,DOGE:true}};
+const DEF={capital:100,lossStop:30,lev:3,risk:1,levTf:15,tpR:3,coins:{BTC:true,ETH:true,SOL:true,BNB:true,XRP:true,DOGE:true}};
 
 const now=()=>Date.now()+(window.__t||0);
 function newAcc(cap,rate){const u=cap/rate;return{cash:u,startUsd:u,positions:[],closed:[],equity:[[now(),u]],paused:false,brake:null,trades:0,grid:{},cool:{}}}
@@ -230,13 +230,15 @@ const FEED=[];function feed(cls,msg){FEED.unshift({t:now(),cls,msg});if(FEED.len
 let feedDirty=false;
 
 /* ---------- Marktdaten ---------- */
-const M={};for(const c of COINS)M[c]={candles:[],cur:null,price:0,prev:0,ch24:0,flash:''};
+const M={};for(const c of COINS)M[c]={candles:[],cur:null,price:0,prev:0,ch24:0,flash:'',tf:{5:[],15:[]}};
 let ws=null,wsState='off',lastMsg=0,pollTimer=null;
 async function history(c){
   for(const base of ['https://data-api.binance.vision','https://api.binance.com']){
     try{const r=await fetch(`${base}/api/v3/klines?symbol=${c}USDT&interval=1m&limit=500`,{cache:'no-store'});if(!r.ok)continue;
       const j=await r.json();const cs=j.map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}));
-      M[c].cur=cs.pop();M[c].candles=cs;M[c].price=M[c].cur.c;return true}catch(e){}}
+      M[c].cur=cs.pop();M[c].candles=cs;M[c].price=M[c].cur.c;
+      for(const tf of [5,15]){try{const r2=await fetch(`${base}/api/v3/klines?symbol=${c}USDT&interval=${tf}m&limit=400`,{cache:'no-store'});if(r2.ok)M[c].tf[tf]=(await r2.json()).map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}))}catch(e){}}
+      return true}catch(e){}}
   return false}
 function connect(){
   if(ws)try{ws.close()}catch(e){}
@@ -309,9 +311,10 @@ function onPrice(c,p){
       if(k==='lev'){const sd=pos.side;pos.best=sd>0?Math.max(pos.best,p):Math.min(pos.best,p);
         if(sd*(p-pos.liqPrice)<=0){sell(pos,'LIQUIDIERT');continue}
         if(!pos.be&&sd*(pos.best-pos.mid0)>=pos.R){pos.be=true;pos.slPrice=pos.mid0*(1+sd*0.0012);feed('i',`HEBEL ${c}: +1R erreicht – Stop auf Einstieg (Break-even)`)}
-        if(sd*(p-pos.slPrice)<=0)sell(pos,pos.be?'Break-even-Stop':'Stop-Loss');
-        else if(sd*(p-pos.tpPrice)>=0)sell(pos,'Ziel 2R');
-        else if(now()-pos.t>STRATS.lev.maxHold*60000)sell(pos,'Zeit-Stop');
+        if(sd*(pos.best-pos.mid0)>=2*pos.R){const tr=pos.best-sd*pos.R;if(sd*(tr-pos.slPrice)>0){if(!pos.trail)feed('i',`HEBEL ${c}: +2R – Trailing-Stop läuft mit (1R Abstand)`);pos.trail=true;pos.slPrice=tr}}
+        if(sd*(p-pos.slPrice)<=0)sell(pos,pos.trail?'Trailing-Stop':pos.be?'Break-even-Stop':'Stop-Loss');
+        else if(pos.tpPrice&&sd*(p-pos.tpPrice)>=0)sell(pos,`Ziel ${S.settings.tpR}R`);
+        else if(now()-pos.t>(pos.maxHold||STRATS.lev.maxHold)*60000)sell(pos,'Zeit-Stop');
         continue}
       const P=STRATS[k],ch=(p/pos.mid0-1)*100,fp=(p/pos.peak-1)*100,pk=(pos.peak/pos.mid0-1)*100;
       if(pos.slPrice&&p<=pos.slPrice)sell(pos,'Stop-Loss');
@@ -338,8 +341,17 @@ function gridStep(c,p){
 /* ---------- Signale (bei jeder geschlossenen 1-Min.-Kerze) ---------- */
 const why={grid:'',brk:'',ema:'',fib:'',lev:''};
 function canOpen(k,c){const a=S.acc[k];return !a.paused&&coinOn(c)&&!a.positions.some(p=>p.coin===c)&&a.positions.length<3&&!(a.cool[c]>now())}
+function aggTf(c){const cd=M[c].candles[M[c].candles.length-1];if(!cd)return[];const closed=[];
+  for(const tf of [5,15]){const arr=M[c].tf[tf],b=Math.floor(cd.t/(tf*60000))*tf*60000,last=arr[arr.length-1];
+    if(last&&last.t===b){last.h=Math.max(last.h,cd.h);last.l=Math.min(last.l,cd.l);last.c=cd.c;last.v+=cd.v}
+    else if(!last||b>last.t){arr.push({t:b,o:cd.o,h:cd.h,l:cd.l,c:cd.c,v:cd.v});if(arr.length>600)arr.shift()}
+    if((cd.t+60000)%(tf*60000)===0)closed.push(tf)}
+  return closed}
+function indTf(c,tf){if(tf===1)return ind(c);const cs=M[c].tf[tf];if(cs.length<210)return null;const cl=cs.map(x=>x.c);
+  return{cs,cl,n:cl.length-1,e9:ema(cl,9),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:atrPct(cs)}}
 function onCandleClose(c){
-  if(!S.running)return;const I=ind(c);if(!I)return;const {cs,n,e9,e21,e50,e200}=I,last=cs[n],P=STRATS;
+  if(!S.running)return;const tfClosed=aggTf(c),TF=+S.settings.levTf||15;
+  if(TF!==1&&tfClosed.includes(TF)&&canOpen('lev',c)){const J=indTf(c,TF);if(J){const sig=levSignal(c,J,TF);if(sig.side)openLev(c,sig,J,TF)}}const I=ind(c);if(!I)return;const {cs,n,e9,e21,e50,e200}=I,last=cs[n],P=STRATS;
   const chg=(last.c/last.o-1)*100,avgV=cs.slice(n-20,n).reduce((s,x)=>s+x.v,0)/20;
   feed('i',`${c} Kerze zu: ${pct(chg,2)} · Vol ${avgV?(last.v/avgV).toFixed(1):'–'}× · EMA9 ${e9[n]>e21[n]?'über':'unter'} EMA21`);
   // Ausbruch
@@ -356,18 +368,18 @@ function onCandleClose(c){
       const p=M[c].price,sl=f.f786*0.999,tp=f.hi*0.999;
       if((tp/p-1)>2.5*FEE&&(p/sl-1)<0.03)buy('fib',c,equityOf(S.acc.fib)*P.fib.size/100,`Rücksetzer in 50–61,8 %-Zone (Swing ${pct(f.mv,1)})`,{slPrice:sl,tpPrice:tp})}}
   // Hebel Long/Short – Trendfolge mit Bestätigung
-  if(canOpen('lev',c)){const sig=levSignal(c,I);if(sig.side)openLev(c,sig,I)}
+  if(TF===1&&canOpen('lev',c)){const sig=levSignal(c,I,1);if(sig.side)openLev(c,sig,I,1)}
   updateWhy();dirty=true}
-function levSignal(c,I){
+function levSignal(c,I,tf=1){
   const {cs,cl,n,e50,e200}=I,last=cs[n],r=rsi(cl),atr=I.atr,avgV=cs.slice(n-20,n).reduce((s,x)=>s+x.v,0)/20;
   const hi10=Math.max(...cs.slice(n-10,n).map(x=>x.h)),lo10=Math.min(...cs.slice(n-10,n).map(x=>x.l));
-  const up=last.c>e200[n]&&e50[n]>e200[n],dn=last.c<e200[n]&&e50[n]<e200[n],vol=last.v>=avgV*1.3,volOk=atr>=0.05&&atr<=0.6;
+  const up=last.c>e200[n]&&e50[n]>e200[n],dn=last.c<e200[n]&&e50[n]<e200[n],vol=last.v>=avgV*1.3,sq=Math.sqrt(tf),volOk=atr>=0.05*sq&&atr<=0.6*sq;
   const st={c,r,atr,up,dn,dHi:(hi10/last.c-1)*100,dLo:(last.c/lo10-1)*100};
-  if(!volOk)return{...st,why:atr<0.05?'Markt zu ruhig':'Markt zu wild'};
+  if(!volOk)return{...st,why:atr<0.05*sq?'Markt zu ruhig':'Markt zu wild'};
   if(up&&last.c>hi10&&r>=50&&r<=70&&vol)return{...st,side:1};
   if(dn&&last.c<lo10&&r>=30&&r<=50&&vol)return{...st,side:-1};
   return{...st,why:!up&&!dn?'kein klarer Trend':up?(last.c<=hi10?'wartet auf Ausbruch nach oben':r>70?'RSI überkauft':!vol?'zu wenig Volumen':'RSI zu schwach'):(last.c>=lo10?'wartet auf Ausbruch nach unten':r<30?'RSI überverkauft':!vol?'zu wenig Volumen':'RSI zu stark')}}
-function openLev(c,sig,I){
+function openLev(c,sig,I,tf=1){
   const a=S.acc.lev,st=S.settings,p=M[c].price,sd=sig.side,eq=equityOf(a);
   const stopDist=p*Math.max(0.0015,I.atr/100*1.5),risk=eq*st.risk/100;
   let notional=risk/(stopDist/p+2*FFEE+2*SLIP);notional=Math.min(notional,eq*st.lev*0.95,(a.cash*0.95)*st.lev);
@@ -375,9 +387,9 @@ function openLev(c,sig,I){
   const entry=p*(1+sd*SLIP),qty=notional/entry,fee=notional*FFEE;
   a.cash-=margin+fee;
   const pos={s:'lev',coin:c,side:sd,lev:st.lev,qty,margin,cost:margin+fee,entry,mid0:p,peak:p,best:p,t:now(),R:stopDist,
-    slPrice:p-sd*stopDist,tpPrice:p+sd*stopDist*2,liqPrice:entry*(1-sd*(1/st.lev-MMR)),fund:0,lastFund:now()};
+    slPrice:p-sd*stopDist,tpPrice:st.tpR>0?p+sd*stopDist*st.tpR:null,tf,maxHold:40*tf,liqPrice:entry*(1-sd*(1/st.lev-MMR)),fund:0,lastFund:now()};
   a.positions.push(pos);a.trades++;
-  const txt=`${sd>0?'LONG':'SHORT'} ${st.lev}x · ${c} @ ${px(p)} · Einsatz ${eur(margin)} (Position ${eur(notional)}) · Stop ${px(pos.slPrice)} · Ziel ${px(pos.tpPrice)} · RSI ${sig.r.toFixed(0)}`;
+  const txt=`${sd>0?'LONG':'SHORT'} ${st.lev}x · ${tf}-Min. · ${c} @ ${px(p)} · Einsatz ${eur(margin)} (Position ${eur(notional)}) · Stop ${px(pos.slPrice)} · Ziel ${pos.tpPrice?px(pos.tpPrice):'offen (Trailing)'} · RSI ${sig.r.toFixed(0)}`;
   feed('b',txt);log('b','HEBEL '+txt)}
 function updateWhy(){
   const act=COINS.filter(coinOn);let best=null;
@@ -387,7 +399,7 @@ function updateWhy(){
   why.ema=`EMA 9 über 21 bei: ${up.join(', ')||'keinem'} · über EMA 200: ${above.join(', ')||'keinem'}. Kauft beim frischen Kreuz nach oben im Aufwärtstrend.`;
   const fz=act.map(c=>{const I=ind(c),f=I&&fibSwing(I.cs);if(!f)return null;const p=M[c].price;return{c,f,in:p<=f.f50&&p>=f.f618,d:(p/f.f50-1)*100}}).filter(Boolean);
   why.fib=fz.length?fz.map(x=>`${x.c} ${x.in?'in der Zone ✓':(x.d>0?pct(-x.d,2)+' bis Zone':'unter Zone')}`).join(' · ')+' · Kauft bei grüner Kerze in der Zone.':'Kein frischer Swing ≥ 1 % in der letzten Stunde – wartet auf Bewegung.';
-  why.lev=act.map(c=>{const I=ind(c);if(!I)return null;const s=levSignal(c,I);return `${c}: ${s.up?'Trend ↑':s.dn?'Trend ↓':'kein Trend'}, RSI ${s.r.toFixed(0)}${s.why?' – '+s.why:''}`}).filter(Boolean).join(' · ');
+  const TFw=+S.settings.levTf||15;why.lev=`${TFw}-Min.-Kerzen · `+act.map(c=>{const I=indTf(c,TFw);if(!I)return null;const s=levSignal(c,I,TFw);return `${c}: ${s.up?'Trend ↑':s.dn?'Trend ↓':'kein Trend'}, RSI ${s.r.toFixed(0)}${s.why?' – '+s.why:''}`}).filter(Boolean).join(' · ');
   const g=S.acc.grid;why.grid=GRID_COINS.filter(coinOn).map(c=>{const gg=g.grid[c];if(!gg)return `${c}: kein Netz`;const l=g.positions.filter(x=>x.coin===c).length,nx=gg.levels.find((lv,i)=>!g.positions.some(x=>x.coin===c&&x.lvl===i));return `${c}: ${l}/10 Stufen belegt${nx?`, nächster Kauf bei ${px(nx)} (${pct((nx/M[c].price-1)*100,2)})`:''}`}).join(' · ')}
 function brakeCheck(){for(const k of SK){const a=S.acc[k];if(a.paused)continue;const eq=equityOf(a);if(a.brake==null)a.brake=eq;
   if(eq<a.brake*(1-S.settings.lossStop/100)){for(const p of [...a.positions])sell(p,'Notbremse');a.paused=true;a.grid={};log('s',`NOTBREMSE ${STRATS[k].name}: −${S.settings.lossStop} % – pausiert`);feed('k',`NOTBREMSE: ${STRATS[k].name} pausiert`)}}}
@@ -412,7 +424,7 @@ function render(){
   $('params').innerHTML={grid:'Netz mit <b>10 Stufen</b> unter dem Kurs, Abstand je nach Schwankung <b>0,35–1,2 %</b> · jede Stufe verkauft eine Stufe höher · Netz zieht nach oben mit · Notausstieg <b>1,5 %</b> unter der untersten Stufe · BTC, ETH, SOL',
     brk:`Kauft bei Schlusskurs über dem <b>20-Kerzen-Hoch</b>, Volumen ≥ <b>1,5×</b>, über steigender EMA 50 · Ziel <b>+${P.tp} %</b> · Stop <b>−${P.sl} %</b> · Trailing ab <b>+${P.trailStart} %</b> mit <b>${P.trail} %</b> · max. <b>${P.maxHold} Min.</b> · <b>${P.size} %</b> pro Trade`,
     ema:`Kauft beim Kreuz <b>EMA 9 über EMA 21</b>, Kurs über <b>EMA 200</b> · Ziel <b>+${P.tp} %</b> · Stop <b>−${P.sl} %</b> · Verkauf beim Kreuz nach unten · Trailing ab <b>+${P.trailStart} %</b> · max. <b>${P.maxHold} Min.</b>`,
-    lev:`<b>Long</b>: Kurs über EMA 200 und EMA 50 über EMA 200, Schluss über dem <b>10-Kerzen-Hoch</b>, RSI <b>50–70</b>, Volumen ≥ <b>1,3×</b> · <b>Short</b>: genau spiegelverkehrt (RSI 30–50) · nur bei normaler Schwankung · Stop <b>1,5× ATR</b> · Ziel <b>2R</b> · ab +1R Stop auf Einstieg · <b>${S.settings.lev}x Hebel</b>, Risiko <b>${S.settings.risk} %</b> pro Trade · Futures-Gebühr 0,05 % auf die Position, Funding, Liquidation simuliert`,
+    lev:`<b>Long</b>: Kurs über EMA 200 und EMA 50 über EMA 200, Schluss über dem <b>10-Kerzen-Hoch</b> auf <b>${S.settings.levTf}-Min.-Kerzen</b>, RSI <b>50–70</b>, Volumen ≥ <b>1,3×</b> · <b>Short</b>: genau spiegelverkehrt (RSI 30–50) · nur bei normaler Schwankung · Stop <b>1,5× ATR</b> · Ziel <b>${S.settings.tpR>0?S.settings.tpR+'R':'offen'}</b> · ab +1R Stop auf Einstieg · ab +2R Trailing mit 1R Abstand · <b>${S.settings.lev}x Hebel</b>, Risiko <b>${S.settings.risk} %</b> pro Trade · Futures-Gebühr 0,05 % auf die Position, Funding, Liquidation simuliert`,
     fib:`Sucht Swing ≥ <b>1 %</b> der letzten Stunde, kauft grüne Kerze in der <b>50–61,8 %</b>-Zone · Stop unter <b>78,6 %</b> · Ziel = altes Hoch · max. <b>${P.maxHold} Min.</b>`}[k]+(k==='lev'?'':' · Gebühr 0,1 % je Seite');
   $('why').textContent=!S.running?'Pausiert – auf Start tippen.':a.paused?'Diese Strategie ist pausiert.':(why[k]||'Lädt…');
   const link=c=>`https://www.binance.com/de/trade/${c}_USDT`;
@@ -482,8 +494,8 @@ $('ticker').addEventListener('click',e=>{const t=e.target.closest('[data-c]');if
 $('lbBody').addEventListener('click',e=>{const b=e.target.closest('[data-p]');
   if(b){const k=b.dataset.p,a=S.acc[k];a.paused=!a.paused;if(!a.paused)a.brake=equityOf(a);else if(k==='grid'){}log('i',`${STRATS[k].name} ${a.paused?'pausiert':'läuft wieder'}`);dirty=true;return}
   const r=e.target.closest('[data-s]');if(r){S.view=r.dataset.s;dirty=true}});
-function renderSettings(){$('setForm').innerHTML=`<label>Startkapital pro Strategie (€)<input id="f_capital" type="number" inputmode="decimal" step="any" value="${esc(S.settings.capital)}"></label><label>Hebel für Long/Short (x)<input id="f_lev" type="number" inputmode="decimal" step="1" min="1" max="20" value="${esc(S.settings.lev)}"></label><label>Risiko pro Hebel-Trade (% vom Konto)<input id="f_risk" type="number" inputmode="decimal" step="any" value="${esc(S.settings.risk)}"></label><label>Notbremse pro Strategie (−%)<input id="f_lossStop" type="number" inputmode="decimal" step="any" value="${esc(S.settings.lossStop)}"></label>`+COINS.map(c=>`<label>${c}<select id="f_c_${c}"><option value="1"${coinOn(c)?' selected':''}>handeln</option><option value="0"${coinOn(c)?'':' selected'}>nicht handeln</option></select></label>`).join('')}
-$('saveBtn').onclick=()=>{const cap=+$('f_capital').value,ls=+$('f_lossStop').value;if(cap>0)S.settings.capital=cap;if(ls>0)S.settings.lossStop=ls;const lv=+$('f_lev').value,rk=+$('f_risk').value;if(lv>=1&&lv<=20)S.settings.lev=Math.round(lv);if(rk>0&&rk<=5)S.settings.risk=rk;for(const c of COINS)S.settings.coins[c]=$('f_c_'+c).value==='1';log('i','Einstellungen gespeichert');dirty=true;save()};
+function renderSettings(){$('setForm').innerHTML=`<label>Startkapital pro Strategie (€)<input id="f_capital" type="number" inputmode="decimal" step="any" value="${esc(S.settings.capital)}"></label><label>Hebel für Long/Short (x)<input id="f_lev" type="number" inputmode="decimal" step="1" min="1" max="20" value="${esc(S.settings.lev)}"></label><label>Zeiteinheit Long/Short<select id="f_tf">${[1,5,15].map(t=>`<option value="${t}"${+S.settings.levTf===t?' selected':''}>${t} Min.</option>`).join('')}</select></label><label>Ziel Long/Short (R, 0 = nur Trailing)<input id="f_tpR" type="number" inputmode="decimal" step="0.5" value="${esc(S.settings.tpR)}"></label><label>Risiko pro Hebel-Trade (% vom Konto)<input id="f_risk" type="number" inputmode="decimal" step="any" value="${esc(S.settings.risk)}"></label><label>Notbremse pro Strategie (−%)<input id="f_lossStop" type="number" inputmode="decimal" step="any" value="${esc(S.settings.lossStop)}"></label>`+COINS.map(c=>`<label>${c}<select id="f_c_${c}"><option value="1"${coinOn(c)?' selected':''}>handeln</option><option value="0"${coinOn(c)?'':' selected'}>nicht handeln</option></select></label>`).join('')}
+$('saveBtn').onclick=()=>{const cap=+$('f_capital').value,ls=+$('f_lossStop').value;if(cap>0)S.settings.capital=cap;if(ls>0)S.settings.lossStop=ls;const lv=+$('f_lev').value,rk=+$('f_risk').value;if(lv>=1&&lv<=20)S.settings.lev=Math.round(lv);if(rk>0&&rk<=5)S.settings.risk=rk;S.settings.levTf=+$('f_tf').value;const tr=+$('f_tpR').value;if(tr>=0&&tr<=20)S.settings.tpR=tr;for(const c of COINS)S.settings.coins[c]=$('f_c_'+c).value==='1';log('i','Einstellungen gespeichert');dirty=true;save()};
 $('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(SK.flatMap(k=>S.acc[k].closed),null,1));$('copyBtn').textContent='Kopiert ✓'}catch(e){$('copyBtn').textContent='Kopieren nicht erlaubt'}setTimeout(()=>$('copyBtn').textContent='Trades kopieren (JSON)',2000)};
 $('resetBtn').onclick=()=>$('modal').classList.add('on');$('mNo').onclick=()=>$('modal').classList.remove('on');
 $('mYes').onclick=()=>{const st=S.settings,r=S.eurRate,run=S.running,v=S.view,c=S.coin;S=fresh(st);S.eurRate=r;S.running=run;S.view=v;S.coin=c;for(const k of SK)S.acc[k]=newAcc(st.capital,r);log('i','Wettkampf neu gestartet');$('modal').classList.remove('on');dirty=true;save()};
