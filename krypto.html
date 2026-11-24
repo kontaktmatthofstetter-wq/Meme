@@ -113,7 +113,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
 <div class="wrap">
 <header>
   <div class="logo">MD</div>
-  <div><h1>Krypto Desk</h1><div class="sub">BTC · ETH · SOL · BNB · XRP · DOGE · Binance-Livekurse · 4 Strategien im Wettkampf · Paper</div></div>
+  <div><h1>Krypto Desk</h1><div class="sub">BTC · ETH · SOL · BNB · XRP · DOGE · Binance-Livekurse · 5 Strategien im Wettkampf · Long &amp; Short · Paper</div></div>
   <div class="sp"></div>
   <span class="pill" title="Verbindung zu Binance"><i class="dot" id="wsDot"></i><span id="wsTxt">Getrennt</span></span>
   <button class="btn" id="wakeBtn" type="button">Bildschirm wach: aus</button>
@@ -204,9 +204,11 @@ const STRATS={
   grid:{name:'Grid-Bot',color:'#5aa8ff',desc:'kauft Stufe für Stufe tiefer, verkauft eine Stufe höher'},
   brk:{name:'Ausbruch-Scalper',color:'#3ee08f',desc:'kauft Ausbrüche über das 20-Kerzen-Hoch mit Volumen',tp:1.0,sl:0.5,trailStart:0.6,trail:0.3,maxHold:30,size:30},
   ema:{name:'EMA-Trend',color:'#f2c14e',desc:'EMA 9 kreuzt EMA 21 nach oben, über EMA 200',tp:1.5,sl:0.8,trailStart:0.8,trail:0.4,maxHold:90,size:30},
-  fib:{name:'Fibonacci',color:'#a98bff',desc:'kauft Rücksetzer in die 50–61,8 %-Zone',maxHold:120,size:30}};
+  fib:{name:'Fibonacci',color:'#a98bff',desc:'kauft Rücksetzer in die 50–61,8 %-Zone',maxHold:120,size:30},
+  lev:{name:'Hebel Long/Short',color:'#ff8a5b',desc:'Trendfolge mit Hebel, Long und Short, 1 % Risiko pro Trade',maxHold:90}};
+const FFEE=0.0005,FUND=0.0001,MMR=0.005;
 const SK=Object.keys(STRATS);
-const DEF={capital:100,lossStop:30,coins:{BTC:true,ETH:true,SOL:true,BNB:true,XRP:true,DOGE:true}};
+const DEF={capital:100,lossStop:30,lev:3,risk:1,coins:{BTC:true,ETH:true,SOL:true,BNB:true,XRP:true,DOGE:true}};
 
 const now=()=>Date.now()+(window.__t||0);
 function newAcc(cap,rate){const u=cap/rate;return{cash:u,startUsd:u,positions:[],closed:[],equity:[[now(),u]],paused:false,brake:null,trades:0,grid:{},cool:{}}}
@@ -268,6 +270,7 @@ async function poll(){ // Notlösung, falls WebSocket blockiert ist
 
 /* ---------- Indikatoren ---------- */
 function ema(vals,n){const k=2/(n+1);let e=vals[0];const out=[e];for(let i=1;i<vals.length;i++){e=vals[i]*k+e*(1-k);out.push(e)}return out}
+function rsi(cl,n=14){let g=0,l=0;for(let i=cl.length-n;i<cl.length;i++){const d=cl[i]-cl[i-1];if(d>0)g+=d;else l-=d}return l===0?100:100-100/(1+g/l)}
 function atrPct(cs,n=14){const s=cs.slice(-n-1);let sum=0;for(let i=1;i<s.length;i++){const a=s[i],b=s[i-1];sum+=Math.max(a.h-a.l,Math.abs(a.h-b.c),Math.abs(a.l-b.c))}return sum/n/s[s.length-1].c*100}
 function ind(c){const cs=M[c].candles;if(cs.length<210)return null;const cl=cs.map(x=>x.c);
   const e9=ema(cl,9),e21=ema(cl,21),e50=ema(cl,50),e200=ema(cl,200),n=cl.length-1;
@@ -278,8 +281,11 @@ function fibSwing(cs){const w=cs.slice(-60);let hi=-1,hiI=0;w.forEach((x,i)=>{if
   return{hi,lo,mv,f50:hi-r*0.5,f618:hi-r*0.618,f786:hi-r*0.786,f382:hi-r*0.382,since:w.length-1-hiI}}
 
 /* ---------- Handel ---------- */
-function equityOf(a){return a.cash+a.positions.reduce((s,p)=>s+p.qty*M[p.coin].price*(1-SLIP)*(1-FEE),0)}
-function openPnl(p){return p.qty*M[p.coin].price*(1-SLIP)*(1-FEE)-p.cost}
+function posValue(p,price){price=price??M[p.coin].price;
+  if(p.side){const exit=price*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(exit-p.entry)*p.qty-exit*p.qty*FFEE-(p.fund||0))}
+  return p.qty*price*(1-SLIP)*(1-FEE)}
+function equityOf(a){return a.cash+a.positions.reduce((s,p)=>s+posValue(p),0)}
+function openPnl(p){return posValue(p)-p.cost}
 function buy(k,c,size,info,extra){
   const a=S.acc[k],p=M[c].price;if(!p||a.paused)return null;size=Math.min(size,a.cash);if(size<1)return null;
   const fill=p*(1+SLIP),qty=size*(1-FEE)/fill;a.cash-=size;
@@ -288,11 +294,11 @@ function buy(k,c,size,info,extra){
   log('b',`KAUF ${STRATS[k].name} · ${c} @ ${px(p)} · ${eur(size)}${info?' · '+info:''}`);return pos}
 function sell(p,reason){
   const a=S.acc[p.s];if(!a.positions.includes(p))return;const price=M[p.coin].price;
-  const out=p.qty*price*(1-SLIP)*(1-FEE),pnl=out-p.cost;a.cash+=out;
-  a.closed.unshift({s:p.s,coin:p.coin,reason,cost:p.cost,pnl,pnlPct:pnl/p.cost*100,dur:now()-p.t,t:now(),t0:p.t,in:p.mid0,out:price});
+  const out=reason==='LIQUIDIERT'?0:posValue(p,price),pnl=out-p.cost;a.cash+=out;
+  a.closed.unshift({s:p.s,side:p.side||0,coin:p.coin,reason,cost:p.cost,pnl,pnlPct:pnl/p.cost*100,dur:now()-p.t,t:now(),t0:p.t,in:p.mid0,out:price});
   if(a.closed.length>400)a.closed.length=400;a.positions=a.positions.filter(x=>x!==p);
   if(p.s!=='grid')a.cool[p.coin]=now()+(pnl<0?10:3)*60000;
-  feed(pnl>=0?'b':'k',`VERKAUF ${STRATS[p.s].name} · ${p.coin} @ ${px(price)} · ${reason} · ${pnl>=0?'+':''}${eur(pnl,3)}`);
+  feed(pnl>=0?'b':'k',`${p.side?(p.side>0?'LONG ZU':'SHORT ZU'):'VERKAUF'} ${STRATS[p.s].name} · ${p.coin} @ ${px(price)} · ${reason} · ${pnl>=0?'+':''}${eur(pnl,3)}`);
   log(pnl>=0?'b':'s',`VERKAUF ${STRATS[p.s].name} · ${p.coin} · ${reason} · ${pnl>=0?'+':''}${eur(pnl,3)} (${pct(pnl/p.cost*100,2)}) nach ${mins(now()-p.t)}`)}
 
 /* ---------- Exits (jeder Kurs-Tick) ---------- */
@@ -300,6 +306,13 @@ function onPrice(c,p){
   for(const k of SK){const a=S.acc[k];
     for(const pos of [...a.positions]){if(pos.coin!==c)continue;pos.peak=Math.max(pos.peak,p);
       if(k==='grid'){if(p>=pos.tpPrice)sell(pos,'Grid-Gewinn');continue}
+      if(k==='lev'){const sd=pos.side;pos.best=sd>0?Math.max(pos.best,p):Math.min(pos.best,p);
+        if(sd*(p-pos.liqPrice)<=0){sell(pos,'LIQUIDIERT');continue}
+        if(!pos.be&&sd*(pos.best-pos.mid0)>=pos.R){pos.be=true;pos.slPrice=pos.mid0*(1+sd*0.0012);feed('i',`HEBEL ${c}: +1R erreicht – Stop auf Einstieg (Break-even)`)}
+        if(sd*(p-pos.slPrice)<=0)sell(pos,pos.be?'Break-even-Stop':'Stop-Loss');
+        else if(sd*(p-pos.tpPrice)>=0)sell(pos,'Ziel 2R');
+        else if(now()-pos.t>STRATS.lev.maxHold*60000)sell(pos,'Zeit-Stop');
+        continue}
       const P=STRATS[k],ch=(p/pos.mid0-1)*100,fp=(p/pos.peak-1)*100,pk=(pos.peak/pos.mid0-1)*100;
       if(pos.slPrice&&p<=pos.slPrice)sell(pos,'Stop-Loss');
       else if(pos.tpPrice&&p>=pos.tpPrice)sell(pos,'Gewinnziel');
@@ -323,7 +336,7 @@ function gridStep(c,p){
   g.levels.forEach((lv,i)=>{if(p<=lv&&!lots.some(l=>l.lvl===i)){const pos=buy('grid',c,g.lot,`Stufe ${i+1}`,{lvl:i,tpPrice:lv*(1+g.sp/100)});}})}
 
 /* ---------- Signale (bei jeder geschlossenen 1-Min.-Kerze) ---------- */
-const why={grid:'',brk:'',ema:'',fib:''};
+const why={grid:'',brk:'',ema:'',fib:'',lev:''};
 function canOpen(k,c){const a=S.acc[k];return !a.paused&&coinOn(c)&&!a.positions.some(p=>p.coin===c)&&a.positions.length<3&&!(a.cool[c]>now())}
 function onCandleClose(c){
   if(!S.running)return;const I=ind(c);if(!I)return;const {cs,n,e9,e21,e50,e200}=I,last=cs[n],P=STRATS;
@@ -342,7 +355,30 @@ function onCandleClose(c){
     if(f&&f.since>=3&&last.l<=f.f50&&last.c>=f.f618&&last.c>last.o&&last.c>cs[n-1].h){
       const p=M[c].price,sl=f.f786*0.999,tp=f.hi*0.999;
       if((tp/p-1)>2.5*FEE&&(p/sl-1)<0.03)buy('fib',c,equityOf(S.acc.fib)*P.fib.size/100,`Rücksetzer in 50–61,8 %-Zone (Swing ${pct(f.mv,1)})`,{slPrice:sl,tpPrice:tp})}}
+  // Hebel Long/Short – Trendfolge mit Bestätigung
+  if(canOpen('lev',c)){const sig=levSignal(c,I);if(sig.side)openLev(c,sig,I)}
   updateWhy();dirty=true}
+function levSignal(c,I){
+  const {cs,cl,n,e50,e200}=I,last=cs[n],r=rsi(cl),atr=I.atr,avgV=cs.slice(n-20,n).reduce((s,x)=>s+x.v,0)/20;
+  const hi10=Math.max(...cs.slice(n-10,n).map(x=>x.h)),lo10=Math.min(...cs.slice(n-10,n).map(x=>x.l));
+  const up=last.c>e200[n]&&e50[n]>e200[n],dn=last.c<e200[n]&&e50[n]<e200[n],vol=last.v>=avgV*1.3,volOk=atr>=0.05&&atr<=0.6;
+  const st={c,r,atr,up,dn,dHi:(hi10/last.c-1)*100,dLo:(last.c/lo10-1)*100};
+  if(!volOk)return{...st,why:atr<0.05?'Markt zu ruhig':'Markt zu wild'};
+  if(up&&last.c>hi10&&r>=50&&r<=70&&vol)return{...st,side:1};
+  if(dn&&last.c<lo10&&r>=30&&r<=50&&vol)return{...st,side:-1};
+  return{...st,why:!up&&!dn?'kein klarer Trend':up?(last.c<=hi10?'wartet auf Ausbruch nach oben':r>70?'RSI überkauft':!vol?'zu wenig Volumen':'RSI zu schwach'):(last.c>=lo10?'wartet auf Ausbruch nach unten':r<30?'RSI überverkauft':!vol?'zu wenig Volumen':'RSI zu stark')}}
+function openLev(c,sig,I){
+  const a=S.acc.lev,st=S.settings,p=M[c].price,sd=sig.side,eq=equityOf(a);
+  const stopDist=p*Math.max(0.0015,I.atr/100*1.5),risk=eq*st.risk/100;
+  let notional=risk/(stopDist/p+2*FFEE+2*SLIP);notional=Math.min(notional,eq*st.lev*0.95,(a.cash*0.95)*st.lev);
+  const margin=notional/st.lev;if(margin<1)return;
+  const entry=p*(1+sd*SLIP),qty=notional/entry,fee=notional*FFEE;
+  a.cash-=margin+fee;
+  const pos={s:'lev',coin:c,side:sd,lev:st.lev,qty,margin,cost:margin+fee,entry,mid0:p,peak:p,best:p,t:now(),R:stopDist,
+    slPrice:p-sd*stopDist,tpPrice:p+sd*stopDist*2,liqPrice:entry*(1-sd*(1/st.lev-MMR)),fund:0,lastFund:now()};
+  a.positions.push(pos);a.trades++;
+  const txt=`${sd>0?'LONG':'SHORT'} ${st.lev}x · ${c} @ ${px(p)} · Einsatz ${eur(margin)} (Position ${eur(notional)}) · Stop ${px(pos.slPrice)} · Ziel ${px(pos.tpPrice)} · RSI ${sig.r.toFixed(0)}`;
+  feed('b',txt);log('b','HEBEL '+txt)}
 function updateWhy(){
   const act=COINS.filter(coinOn);let best=null;
   for(const c of act){const I=ind(c);if(!I)continue;const hi20=Math.max(...I.cs.slice(I.n-19).map(x=>x.h)),d=(hi20/M[c].price-1)*100;if(!best||d<best.d)best={c,d}}
@@ -351,6 +387,7 @@ function updateWhy(){
   why.ema=`EMA 9 über 21 bei: ${up.join(', ')||'keinem'} · über EMA 200: ${above.join(', ')||'keinem'}. Kauft beim frischen Kreuz nach oben im Aufwärtstrend.`;
   const fz=act.map(c=>{const I=ind(c),f=I&&fibSwing(I.cs);if(!f)return null;const p=M[c].price;return{c,f,in:p<=f.f50&&p>=f.f618,d:(p/f.f50-1)*100}}).filter(Boolean);
   why.fib=fz.length?fz.map(x=>`${x.c} ${x.in?'in der Zone ✓':(x.d>0?pct(-x.d,2)+' bis Zone':'unter Zone')}`).join(' · ')+' · Kauft bei grüner Kerze in der Zone.':'Kein frischer Swing ≥ 1 % in der letzten Stunde – wartet auf Bewegung.';
+  why.lev=act.map(c=>{const I=ind(c);if(!I)return null;const s=levSignal(c,I);return `${c}: ${s.up?'Trend ↑':s.dn?'Trend ↓':'kein Trend'}, RSI ${s.r.toFixed(0)}${s.why?' – '+s.why:''}`}).filter(Boolean).join(' · ');
   const g=S.acc.grid;why.grid=GRID_COINS.filter(coinOn).map(c=>{const gg=g.grid[c];if(!gg)return `${c}: kein Netz`;const l=g.positions.filter(x=>x.coin===c).length,nx=gg.levels.find((lv,i)=>!g.positions.some(x=>x.coin===c&&x.lvl===i));return `${c}: ${l}/10 Stufen belegt${nx?`, nächster Kauf bei ${px(nx)} (${pct((nx/M[c].price-1)*100,2)})`:''}`}).join(' · ')}
 function brakeCheck(){for(const k of SK){const a=S.acc[k];if(a.paused)continue;const eq=equityOf(a);if(a.brake==null)a.brake=eq;
   if(eq<a.brake*(1-S.settings.lossStop/100)){for(const p of [...a.positions])sell(p,'Notbremse');a.paused=true;a.grid={};log('s',`NOTBREMSE ${STRATS[k].name}: −${S.settings.lossStop} % – pausiert`);feed('k',`NOTBREMSE: ${STRATS[k].name} pausiert`)}}}
@@ -375,10 +412,11 @@ function render(){
   $('params').innerHTML={grid:'Netz mit <b>10 Stufen</b> unter dem Kurs, Abstand je nach Schwankung <b>0,35–1,2 %</b> · jede Stufe verkauft eine Stufe höher · Netz zieht nach oben mit · Notausstieg <b>1,5 %</b> unter der untersten Stufe · BTC, ETH, SOL',
     brk:`Kauft bei Schlusskurs über dem <b>20-Kerzen-Hoch</b>, Volumen ≥ <b>1,5×</b>, über steigender EMA 50 · Ziel <b>+${P.tp} %</b> · Stop <b>−${P.sl} %</b> · Trailing ab <b>+${P.trailStart} %</b> mit <b>${P.trail} %</b> · max. <b>${P.maxHold} Min.</b> · <b>${P.size} %</b> pro Trade`,
     ema:`Kauft beim Kreuz <b>EMA 9 über EMA 21</b>, Kurs über <b>EMA 200</b> · Ziel <b>+${P.tp} %</b> · Stop <b>−${P.sl} %</b> · Verkauf beim Kreuz nach unten · Trailing ab <b>+${P.trailStart} %</b> · max. <b>${P.maxHold} Min.</b>`,
-    fib:`Sucht Swing ≥ <b>1 %</b> der letzten Stunde, kauft grüne Kerze in der <b>50–61,8 %</b>-Zone · Stop unter <b>78,6 %</b> · Ziel = altes Hoch · max. <b>${P.maxHold} Min.</b>`}[k]+' · Gebühr 0,1 % je Seite';
+    lev:`<b>Long</b>: Kurs über EMA 200 und EMA 50 über EMA 200, Schluss über dem <b>10-Kerzen-Hoch</b>, RSI <b>50–70</b>, Volumen ≥ <b>1,3×</b> · <b>Short</b>: genau spiegelverkehrt (RSI 30–50) · nur bei normaler Schwankung · Stop <b>1,5× ATR</b> · Ziel <b>2R</b> · ab +1R Stop auf Einstieg · <b>${S.settings.lev}x Hebel</b>, Risiko <b>${S.settings.risk} %</b> pro Trade · Futures-Gebühr 0,05 % auf die Position, Funding, Liquidation simuliert`,
+    fib:`Sucht Swing ≥ <b>1 %</b> der letzten Stunde, kauft grüne Kerze in der <b>50–61,8 %</b>-Zone · Stop unter <b>78,6 %</b> · Ziel = altes Hoch · max. <b>${P.maxHold} Min.</b>`}[k]+(k==='lev'?'':' · Gebühr 0,1 % je Seite');
   $('why').textContent=!S.running?'Pausiert – auf Start tippen.':a.paused?'Diese Strategie ist pausiert.':(why[k]||'Lädt…');
   const link=c=>`https://www.binance.com/de/trade/${c}_USDT`;
-  $('openBody').innerHTML=a.positions.map(p=>{const v=openPnl(p)/p.cost*100;return `<tr><td><a href="${link(p.coin)}" target="_blank" rel="noopener">${p.coin}</a>${p.lvl!=null?' <span class="mute">Stufe '+(p.lvl+1)+'</span>':''}</td><td class="n">${eur(p.cost)}</td><td class="n ${v>=0?'up':'down'}">${pct(v,2)}</td><td class="n">${mins(now()-p.t)}</td></tr>`}).join('');
+  $('openBody').innerHTML=a.positions.map(p=>{const v=openPnl(p)/p.cost*100;return `<tr><td><a href="${link(p.coin)}" target="_blank" rel="noopener">${p.coin}</a>${p.lvl!=null?' <span class="mute">Stufe '+(p.lvl+1)+'</span>':''}${p.side?` <span class="${p.side>0?'up':'down'}">${p.side>0?'Long':'Short'} ${p.lev}x</span>`:''}</td><td class="n">${eur(p.cost)}</td><td class="n ${v>=0?'up':'down'}">${pct(v,2)}</td><td class="n">${mins(now()-p.t)}</td></tr>`}).join('');
   $('openEmpty').style.display=a.positions.length?'none':'';$('openInfo').textContent=`${P.name} · Cash ${eur(a.cash)}`;
   if(feedDirty){$('feed').innerHTML=FEED.slice(0,40).map((f,i)=>`<div class="${f.cls}${i===0?' new':''}">${hhmm(f.t)} ${esc(f.msg)}</div>`).join('');feedDirty=false}
   $('log').innerHTML=S.logs.slice(0,80).map(x=>`<div class="${x.type}">${hhmm(x.t)} ${esc(x.msg)}</div>`).join('')||'<div class="i">Drück auf Start.</div>';
@@ -423,7 +461,7 @@ function drawCandles(){
   const k=S.view,a=S.acc[k],overlay=[];
   if(k==='grid'&&a.grid[c]){const gg=a.grid[c];gg.levels.forEach((lv,i)=>overlay.push({y:lv,col:'#5aa8ff55',lab:'Stufe '+(i+1)}))}
   if(k==='fib'){const f=fibSwing(m.candles);if(f)[[f.hi,'0 %'],[f.f382,'38,2 %'],[f.f50,'50 %'],[f.f618,'61,8 %'],[f.f786,'78,6 %'],[f.lo,'100 %']].forEach(([v,l])=>overlay.push({y:v,col:'#a98bff66',lab:l}))}
-  for(const p of a.positions)if(p.coin===c){if(p.slPrice)overlay.push({y:p.slPrice,col:'#ff5d5d99',lab:'Stop'});if(p.tpPrice)overlay.push({y:p.tpPrice,col:'#3ee08f99',lab:'Ziel'});overlay.push({y:p.mid0,col:'#e8f3ec88',lab:'Kauf'})}
+  for(const p of a.positions)if(p.coin===c){if(p.slPrice)overlay.push({y:p.slPrice,col:'#ff5d5d99',lab:'Stop'});if(p.tpPrice)overlay.push({y:p.tpPrice,col:'#3ee08f99',lab:'Ziel'});overlay.push({y:p.mid0,col:'#e8f3ec88',lab:p.side?(p.side>0?'Long':'Short'):'Kauf'});if(p.liqPrice)overlay.push({y:p.liqPrice,col:'#ff5d5d55',lab:'Liquidation'})}
   const vis=[...cs.flatMap(x=>[x.h,x.l]),...overlay.map(v=>v.y).filter(v=>v>Math.min(...cs.map(x=>x.l))*0.985&&v<Math.max(...cs.map(x=>x.h))*1.015)];
   let lo=Math.min(...vis),hi=Math.max(...vis);const pad=(hi-lo)*0.06;lo-=pad;hi+=pad;
   const R=52,cw=(W-R)/cs.length,y=v=>8+(hi-v)/(hi-lo)*(H-16);
@@ -444,8 +482,8 @@ $('ticker').addEventListener('click',e=>{const t=e.target.closest('[data-c]');if
 $('lbBody').addEventListener('click',e=>{const b=e.target.closest('[data-p]');
   if(b){const k=b.dataset.p,a=S.acc[k];a.paused=!a.paused;if(!a.paused)a.brake=equityOf(a);else if(k==='grid'){}log('i',`${STRATS[k].name} ${a.paused?'pausiert':'läuft wieder'}`);dirty=true;return}
   const r=e.target.closest('[data-s]');if(r){S.view=r.dataset.s;dirty=true}});
-function renderSettings(){$('setForm').innerHTML=`<label>Startkapital pro Strategie (€)<input id="f_capital" type="number" inputmode="decimal" step="any" value="${esc(S.settings.capital)}"></label><label>Notbremse pro Strategie (−%)<input id="f_lossStop" type="number" inputmode="decimal" step="any" value="${esc(S.settings.lossStop)}"></label>`+COINS.map(c=>`<label>${c}<select id="f_c_${c}"><option value="1"${coinOn(c)?' selected':''}>handeln</option><option value="0"${coinOn(c)?'':' selected'}>nicht handeln</option></select></label>`).join('')}
-$('saveBtn').onclick=()=>{const cap=+$('f_capital').value,ls=+$('f_lossStop').value;if(cap>0)S.settings.capital=cap;if(ls>0)S.settings.lossStop=ls;for(const c of COINS)S.settings.coins[c]=$('f_c_'+c).value==='1';log('i','Einstellungen gespeichert');dirty=true;save()};
+function renderSettings(){$('setForm').innerHTML=`<label>Startkapital pro Strategie (€)<input id="f_capital" type="number" inputmode="decimal" step="any" value="${esc(S.settings.capital)}"></label><label>Hebel für Long/Short (x)<input id="f_lev" type="number" inputmode="decimal" step="1" min="1" max="20" value="${esc(S.settings.lev)}"></label><label>Risiko pro Hebel-Trade (% vom Konto)<input id="f_risk" type="number" inputmode="decimal" step="any" value="${esc(S.settings.risk)}"></label><label>Notbremse pro Strategie (−%)<input id="f_lossStop" type="number" inputmode="decimal" step="any" value="${esc(S.settings.lossStop)}"></label>`+COINS.map(c=>`<label>${c}<select id="f_c_${c}"><option value="1"${coinOn(c)?' selected':''}>handeln</option><option value="0"${coinOn(c)?'':' selected'}>nicht handeln</option></select></label>`).join('')}
+$('saveBtn').onclick=()=>{const cap=+$('f_capital').value,ls=+$('f_lossStop').value;if(cap>0)S.settings.capital=cap;if(ls>0)S.settings.lossStop=ls;const lv=+$('f_lev').value,rk=+$('f_risk').value;if(lv>=1&&lv<=20)S.settings.lev=Math.round(lv);if(rk>0&&rk<=5)S.settings.risk=rk;for(const c of COINS)S.settings.coins[c]=$('f_c_'+c).value==='1';log('i','Einstellungen gespeichert');dirty=true;save()};
 $('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(SK.flatMap(k=>S.acc[k].closed),null,1));$('copyBtn').textContent='Kopiert ✓'}catch(e){$('copyBtn').textContent='Kopieren nicht erlaubt'}setTimeout(()=>$('copyBtn').textContent='Trades kopieren (JSON)',2000)};
 $('resetBtn').onclick=()=>$('modal').classList.add('on');$('mNo').onclick=()=>$('modal').classList.remove('on');
 $('mYes').onclick=()=>{const st=S.settings,r=S.eurRate,run=S.running,v=S.view,c=S.coin;S=fresh(st);S.eurRate=r;S.running=run;S.view=v;S.coin=c;for(const k of SK)S.acc[k]=newAcc(st.capital,r);log('i','Wettkampf neu gestartet');$('modal').classList.remove('on');dirty=true;save()};
@@ -463,7 +501,7 @@ $('wakeBtn').onclick=async()=>{try{if(lock){await lock.release();lock=null}else{
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(S.running&&wsState!=='live')connect();if($('wakeBtn').textContent.endsWith('an')&&!lock)$('wakeBtn').click()}});
 // Takt: Anzeige 1×/s, Equity-Punkt alle 10 s, Speichern alle 5 s
 let sec=0;
-setInterval(()=>{sec++;if(S.running){if(sec%10===0){for(const k of SK){const a=S.acc[k];a.equity.push([now(),equityOf(a)]);if(a.equity.length>3000)a.equity.splice(0,a.equity.length-3000)}brakeCheck();updateWhy()}if(sec%5===0)save()}
+setInterval(()=>{sec++;if(S.running){if(sec%10===0){for(const p of S.acc.lev.positions){const dt=now()-(p.lastFund||now());p.fund=(p.fund||0)+p.qty*M[p.coin].price*FUND*dt/(8*3600e3);p.lastFund=now()}for(const k of SK){const a=S.acc[k];a.equity.push([now(),equityOf(a)]);if(a.equity.length>3000)a.equity.splice(0,a.equity.length-3000)}brakeCheck();updateWhy()}if(sec%5===0)save()}
   if(dirty||sec%1===0){render();dirty=false}
   $('cdTxt').textContent=S.running?(wsState==='live'?'live · Kurse jede Sekunde':wsState==='poll'?'Notbetrieb · alle 5 s':'verbinde…'):'pausiert'},1000);
 $('runBtn').textContent=S.running?'Pause':'Start';$('runBtn').className='btn '+(S.running?'stop':'go');
