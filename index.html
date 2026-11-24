@@ -218,23 +218,29 @@ function setSrc(name,ok,msg){S.src[name]={ok,t:now(),msg:msg||''}}
 
 async function getJSON(url,src,headers){
   try{const r=await fetch(url,{headers:headers||{accept:'application/json'},cache:'no-store'});
-    if(!r.ok){setSrc(src,false,'HTTP '+r.status);return null}
+    if(!r.ok){setSrc(src,r.status===429?'limit':false,r.status===429?'Limit erreicht – kurze Pause':'HTTP '+r.status);return null}
     const j=await r.json();setSrc(src,true);return j}
   catch(e){setSrc(src,false,'blockiert/offline');return null}}
 
 /* ---------- Scout ---------- */
-let scoutN=0;
+let scoutN=0,geckoPause=0;
+const GQ=[['solana',1],['base',1],['solana',2],['bsc',1],['solana',1],['base',2],['solana',2],['bsc',2]];
 async function scout(){
-  const found=[];scoutN++;
-  for(const [c,cfg] of Object.entries(CHAINS)){if(!on(c))continue;
-    const pages=c==='solana'?[1,2]:[1+(scoutN%2)];
-    for(const page of pages){
+  const found=[];
+  // genau 1 GeckoTerminal-Abfrage pro Runde (alle 10 s = 6/Min.), reihum über die Chains
+  if(now()>=geckoPause){
+    let q=null;for(let i=0;i<GQ.length;i++){const c=GQ[scoutN++%GQ.length];if(on(c[0])){q=c;break}}
+    if(q){const [c,page]=q,cfg=CHAINS[c];
       const j=await getJSON(`https://api.geckoterminal.com/api/v2/networks/${cfg.gecko}/new_pools?page=${page}`,'GeckoTerminal',{accept:'application/json;version=20230302'});
+      if(S.src.GeckoTerminal&&S.src.GeckoTerminal.ok==='limit'){geckoPause=now()+60000;log('i','Gecko-Limit erreicht – 60 s Pause, DexScreener scannt weiter')}
       for(const p of (j&&j.data)||[]){
         const id=p.relationships?.base_token?.data?.id||'';const addr=id.slice(id.indexOf('_')+1);
         if(addr&&id.startsWith(cfg.gecko+'_'))found.push({chain:c,addr:norm(c,addr),sym:(p.attributes?.name||'').split(' / ')[0]})}}}
+  if(tickN%3!==0){finishScout(found);return}
   const prof=await getJSON('https://api.dexscreener.com/token-profiles/latest/v1','DexScreener');
   for(const p of Array.isArray(prof)?prof:[]){const c=Object.keys(CHAINS).find(k=>CHAINS[k].dex===p.chainId);if(c&&on(c)&&p.tokenAddress)found.push({chain:c,addr:norm(c,p.tokenAddress),sym:''})}
+  finishScout(found);}
+function finishScout(found){
   const BASES=/^(So11111111111111111111111111111111111111112|0x4200000000000000000000000000000000000006|0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c|0x833589fcd6edb6e08f4c7c32d4f71b54bda02913|0x55d398326f99059ff775485246999027b3197955|0xe9e7cea3dedca5984780bafc599bd69add087d56)$/i;
   let added=0;
   for(const f of found){const k=f.chain+':'+f.addr;if(BASES.test(f.addr)||S.seen[k]||S.watch[k]||S.positions.some(p=>p.key===k))continue;
@@ -353,7 +359,7 @@ let tickN=0,busy=false;
 async function tick(){
   if(busy||!S.running)return;busy=true;
   try{
-    if(tickN%2===0)await scout();
+    await scout();
     tickN++;
     const st=S.settings;
     for(const w of Object.values(S.watch))if(!on(w.chain)){delete S.watch[w.key]}
@@ -408,7 +414,7 @@ function render(){
   $('sPass').textContent=S.cnt.pass.toLocaleString('de-DE');$('sTrade').textContent=S.cnt.trade.toLocaleString('de-DE');
   $('runTxt').textContent=S.running?'Live · Paper':'Pausiert';$('runDot').className='dot '+(S.running?'ok':'wait');
   $('runBtn').textContent=S.running?'Pause':'Start';$('runBtn').className='btn '+(S.running?'stop':'go');
-  $('srcLine').innerHTML=SRC.map(n=>{const s=S.src[n];return `<span title="${esc(s?.msg||'noch nicht abgefragt')}"><i class="dot ${s?(s.ok?'ok':'err'):''}" style="display:inline-block"></i> ${n.replace('Terminal','')}</span>`}).join(' ');
+  $('srcLine').innerHTML=SRC.map(n=>{const s=S.src[n];return `<span title="${esc(s?.msg||'noch nicht abgefragt')}"><i class="dot ${s?(s.ok==='limit'?'wait':s.ok?'ok':'err'):''}" style="display:inline-block"></i> ${n.replace('Terminal','')}</span>`}).join(' ');
   const cnts={scout:`${S.cnt.scan} gescannt`,filter:`${S.cnt.rej} aussortiert`,analyst:`${S.cnt.pass} bewertet`,exec:`${S.cnt.trade} gekauft`,risk:`${S.positions.length} offen`,logger:`${S.logs.length} Zeilen`};
   $('agents').innerHTML=AG.map(([k,n,sub,c,l])=>`<div class="agent"><div class="ic" style="background:${c}">${l}</div><div><b>${n}</b><div class="sub" style="font-size:11px">${sub}</div></div><div class="act">${esc(S.agent[k]||'bereit')}</div><div class="cnt">${cnts[k]}</div></div>`).join('');
   const link=(c,addr,url)=>esc(url||`https://dexscreener.com/${CHAINS[c||'solana'].dex}/${addr}`);
