@@ -131,6 +131,8 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <div><h2 class="up" style="font-size:14px">Im Profit</h2><div class="scroll"><table><tbody id="winBody"></tbody></table></div><div class="empty" id="winEmpty">Noch kein Trade im Plus.</div></div>
     <div><h2 class="down" style="font-size:14px">Im Verlust</h2><div class="scroll"><table><tbody id="lossBody"></tbody></table></div><div class="empty" id="lossEmpty">Noch kein Trade im Minus.</div></div>
   </div>
+  <div id="reasonWrap" style="display:none;margin-top:8px"><h2 style="font-size:14px">Woher kommen Gewinn und Verlust? <span>nach Verkaufsgrund</span></h2>
+  <div class="scroll"><table><thead><tr><th>Grund</th><th class="n">Trades</th><th class="n">Summe</th></tr></thead><tbody id="reasonBody"></tbody></table></div></div>
 </div>
 
 <div class="grid">
@@ -189,8 +191,9 @@ const CHAINS={
   solana:{name:'Solana',tag:'SOL',gecko:'solana',dex:'solana',gas:0.1,fee:0.0025,evm:false},
   base:{name:'Base',tag:'BASE',gecko:'base',dex:'base',gas:0.05,fee:0.003,evm:true,gp:8453},
   bsc:{name:'BSC',tag:'BSC',gecko:'bsc',dex:'bsc',gas:0.1,fee:0.0025,evm:true,gp:56}};
-const DEF={capital:100,sizePct:8,maxOpen:5,minLiq:8000,minAgeMin:3,maxAgeMin:90,maxPump:300,minScore:65,sl:20,trailStart:30,trail:15,tp:150,maxHoldMin:45,strict:true,maxTax:10,chains:{solana:true,base:true,bsc:true}};
-const FIELDS=[['capital','Startkapital (€)'],['sizePct','Positionsgröße (% vom Kapital)'],['maxOpen','Max. offene Positionen'],['minLiq','Min. Liquidität ($)'],['minAgeMin','Min. Token-Alter (Min.)'],['maxAgeMin','Max. Token-Alter (Min.)'],['maxPump','Schon gepumpt ab (% in 1 h)'],['minScore','Analyst Mindest-Score (0–100)'],['sl','Stop-Loss (%)'],['trailStart','Trailing startet ab (+%)'],['trail','Trailing-Abstand (%)'],['tp','Take-Profit (+%)'],['maxHoldMin','Max. Haltezeit (Min.)'],['maxTax','Max. Token-Steuer Base/BSC (%)'],['strict','Sicherheitscheck Pflicht']];
+const SAFE={minLiq:20000,minAgeMin:10,sizePct:5,minScore:70,confirm:3,maxCh5:25,liqExit:15,lossStop:30};
+const DEF={confirm:3,maxCh5:25,liqExit:15,lossStop:30,capital:100,sizePct:8,maxOpen:5,minLiq:8000,minAgeMin:3,maxAgeMin:90,maxPump:300,minScore:65,sl:20,trailStart:30,trail:15,tp:150,maxHoldMin:45,strict:true,maxTax:10,chains:{solana:true,base:true,bsc:true}};
+const FIELDS=[['capital','Startkapital (€)'],['sizePct','Positionsgröße (% vom Kapital)'],['maxOpen','Max. offene Positionen'],['minLiq','Min. Liquidität ($)'],['minAgeMin','Min. Token-Alter (Min.)'],['maxAgeMin','Max. Token-Alter (Min.)'],['maxPump','Schon gepumpt ab (% in 1 h)'],['minScore','Analyst Mindest-Score (0–100)'],['sl','Stop-Loss (%)'],['trailStart','Trailing startet ab (+%)'],['trail','Trailing-Abstand (%)'],['tp','Take-Profit (+%)'],['maxHoldMin','Max. Haltezeit (Min.)'],['maxTax','Max. Token-Steuer Base/BSC (%)'],['confirm','Kaufsignal muss X Runden halten'],['maxCh5','Nicht kaufen ab +% in 5 Min. (zu heiß)'],['liqExit','Verkaufen, wenn Liquidität um % fällt'],['lossStop','Notbremse: Pause ab −% Verlust'],['strict','Sicherheitscheck Pflicht']];
 const AG=[['scout','Scout','neue Pools','#5aa8ff','S'],['filter','Filter','Sicherheitsregeln','#ff5d5d','F'],['analyst','Analyst','Score 0–100','#4fd1c5','A'],['exec','Executor','Paper-Orders','#3ee08f','E'],['risk','Risk','Stop · Trailing','#a98bff','R'],['logger','Logger','alles protokolliert','#c9d4ce','L']];
 const RULES={liq:'Liquidität zu niedrig',auth:'Mint/Freeze nicht gesperrt',lp:'LP nicht gesperrt',holders:'Top-Holder zu konzentriert',insider:'Insider / Bundle',danger:'Sicherheitscheck: Gefahr',rugged:'Bereits gerugged',pump:'Schon gepumpt',norc:'Sicherheitscheck nicht erreichbar',old:'Kein Signal (zu alt)',dead:'Kaum Handel',honeypot:'Honeypot (nicht verkaufbar)',tax:'Token-Steuer zu hoch',owner:'Owner-Rechte gefährlich',closed:'Contract nicht verifiziert'};
 const SRC=['GeckoTerminal','DexScreener','RugCheck','GoPlus'];
@@ -205,7 +208,7 @@ function migrate(s){
   for(const p of s.positions||[]){p.chain='solana';p.addr=p.mint;p.key='solana:'+p.mint;p.tax=0}
   for(const c of s.closed||[])c.chain=c.chain||'solana';
   s.cc={solana:{...(s.cnt||{scan:0,rej:0,pass:0,trade:0})}};s.v=2;return s}
-function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.settings){s.settings={...DEF,...s.settings,chains:{...DEF.chains,...(s.settings.chains||{})}};return migrate(s)}}catch(e){}return fresh()}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.settings){s.settings={...DEF,...s.settings,chains:{...DEF.chains,...(s.settings.chains||{})}};const m=migrate(s);if(!m.settings.v3){Object.assign(m.settings,SAFE,{v3:true});m.brake=null;(m.logs=m.logs||[]).unshift({t:Date.now(),type:'i',msg:'Update: strengere Regeln aktiv (Liq ≥ 20 k, Alter ≥ 10 Min., Signal 3 Runden, 5 % pro Trade, Notbremse)'})}return m}}catch(e){}const f=fresh();f.settings.v3=true;Object.assign(f.settings,SAFE);return f}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -376,6 +379,31 @@ setInterval(()=>{
   const bar=$('cd');if(S.running){const left=Math.max(0,10000-(now()-lastTick));bar.style.width=(100-left/100)+'%';$('cdTxt').textContent=busy?'Runde läuft…':`nächste Runde in ${Math.ceil(left/1000)} s`}
   else{bar.style.width='0';$('cdTxt').textContent='pausiert'}},380);
 
+/* ---------- Risk ---------- */
+function checkPos(p,d){
+  if(!S.positions.includes(p))return;const st=S.settings;
+  if(!d||!d.price){p.miss++;if(p.miss>=40)sell(p,'Daten weg – als Rug gewertet',p.last*0.05);return}
+  p.miss=0;p.last=d.price;p.liqNow=d.liq;p.peak=Math.max(p.peak,d.price);
+  const ch=d.price/p.mid0-1,fromPeak=d.price/p.peak-1,held=now()-p.t;
+  if(d.liq<p.liq0*0.4)sell(p,'Liquidität abgezogen (Rug)');
+  else if(d.liq<p.liq0*(1-st.liqExit/100))sell(p,'Liquidität fließt ab');
+  else if(ch<=-st.sl/100)sell(p,'Stop-Loss');
+  else if(ch>=st.tp/100)sell(p,'Take-Profit');
+  else if(p.peak/p.mid0-1>=st.trailStart/100&&fromPeak<=-st.trail/100)sell(p,'Trailing-Stop');
+  else if(d.s5>=20&&d.s5>d.b5*2&&ch<0.05)sell(p,'Verkaufsdruck');
+  else if(held>st.maxHoldMin*60000&&ch<0.1)sell(p,'Zeit-Stop')}
+let riskBusy=false;
+async function riskTick(){
+  if(riskBusy||!S.running||!S.positions.length)return;riskBusy=true;
+  try{const md=await market(S.positions.map(p=>({chain:p.chain,addr:p.addr})));
+    for(const p of [...S.positions])checkPos(p,md[p.key]);brakeCheck()}
+  catch(e){}finally{riskBusy=false;save();render()}}
+function brakeCheck(){
+  const eq=equityUsd();if(S.brake==null)S.brake=eq;
+  if(S.running&&eq<S.brake*(1-S.settings.lossStop/100)){
+    for(const p of [...S.positions])sell(p,'Notbremse');
+    log('s',`NOTBREMSE: −${S.settings.lossStop} % erreicht – Bot pausiert. Regeln prüfen, dann wieder Start.`);feed('k','NOTBREMSE ausgelöst – Bot pausiert');setRun(false)}}
+
 /* ---------- Main loop ---------- */
 let tickN=0,busy=false;
 async function tick(){
@@ -387,16 +415,7 @@ async function tick(){
     for(const w of Object.values(S.watch))if(!on(w.chain)){delete S.watch[w.key]}
     const items=[...S.positions.map(p=>({chain:p.chain,addr:p.addr})),...Object.values(S.watch).map(w=>({chain:w.chain,addr:w.addr}))];
     const md=items.length?await market(items):{};
-    for(const p of [...S.positions]){
-      const d=md[p.key];
-      if(!d||!d.price){p.miss++;if(p.miss>=12)sell(p,'Daten weg – als Rug gewertet',p.last*0.05);continue}
-      p.miss=0;p.last=d.price;p.liqNow=d.liq;p.peak=Math.max(p.peak,d.price);
-      const ch=d.price/p.mid0-1,fromPeak=d.price/p.peak-1,held=now()-p.t;
-      if(d.liq<p.liq0*0.4)sell(p,'Liquidität abgezogen (Rug)');
-      else if(ch<=-st.sl/100)sell(p,'Stop-Loss');
-      else if(ch>=st.tp/100)sell(p,'Take-Profit');
-      else if(p.peak/p.mid0-1>=st.trailStart/100&&fromPeak<=-st.trail/100)sell(p,'Trailing-Stop');
-      else if(held>st.maxHoldMin*60000&&ch<0.1)sell(p,'Zeit-Stop')}
+    for(const p of [...S.positions])checkPos(p,md[p.key]);
     S.agent.risk=S.agent.risk||'überwacht Positionen';
     let best=null;const lines=[];
     const F=(w,cls,txt,imp)=>lines.push({imp,cls,msg:`${CHAINS[w.chain].tag} $${w.sym} · ${txt}`});
@@ -415,17 +434,21 @@ async function tick(){
       if(v.wait){F(w,'s',`${info} → Sicherheitscheck läuft…`);continue}
       if(v.rule){F(w,'k',`${RULES[v.rule]} → raus`,1);kill(w.key,v.rule,v.d);continue}
       if(!w.passed){w.passed=true;bump(w.chain,'pass');log('i',`FILTER [${CHAINS[w.chain].tag}]: $${w.sym} bestanden · Liq ${kfmt(d.liq)} $`);F(w,'b','Sicherheitscheck bestanden ✓',1)}
-      const old=w.score;w.score=analyse(d,v.score);
+      w.lh=(w.lh||[]).concat(d.liq).slice(-6);
+      const old=w.score;w.score=analyse(d,v.score);w.sig=w.score>=st.minScore?(w.sig||0)+1:0;
+      if(w.score>=st.minScore&&d.ch5>st.maxCh5){w.sig=0;F(w,'s',`Score ${w.score} aber +${d.ch5.toFixed(0)} % in 5 Min. → zu heiß, warte auf Rücksetzer`,1);continue}
+      if(w.score>=st.minScore&&d.liq<Math.max(...w.lh)*0.9){w.sig=0;F(w,'s',`Score ${w.score} aber Liquidität sinkt → kein Kauf`,1);continue}
+      if(w.score>=st.minScore&&w.sig<st.confirm){F(w,'a',`Score ${w.score} ✓ Signal ${w.sig}/${st.confirm} – bestätigen…`,1);continue}
       F(w,w.score>=st.minScore?'b':'a',`Score ${w.score}${w.score>=st.minScore?' ✓ Kaufsignal':' < '+st.minScore}`,old!==w.score);
       S.agent.analyst=`$${w.sym} score ${w.score}${w.score<st.minScore?' < '+st.minScore:' ✓'}`;
-      if(w.score>=st.minScore&&(!best||w.score>best.s))best={w,d,s:w.score,v}}
+      if(w.score>=st.minScore&&w.sig>=st.confirm&&(!best||w.score>best.s))best={w,d,s:w.score,v}}
     const imp=lines.filter(l=>l.imp),rest=lines.filter(l=>!l.imp);
     const take=Math.max(0,14-imp.length),off=rest.length?(feedRot+=take)%rest.length:0;
     const pick=[...imp,...rest.slice(off,off+take),...rest.slice(0,Math.max(0,off+take-rest.length))];
     pick.sort(()=>Math.random()-0.5).forEach(l=>feed(l.cls,l.msg));
     feed('i',`Runde fertig · ${Object.keys(S.watch).length} auf Watchlist · ${S.positions.length} offen`);
     if(best&&S.positions.length<st.maxOpen)buy(best.w,best.d,best.s,best.v);
-    security();
+    security();brakeCheck();
     const eq=equityUsd();S.equity.push([now(),eq]);if(S.equity.length>3000)S.equity.splice(0,S.equity.length-3000);
     S.agent.logger=`${S.logs.length} Einträge`;
   }catch(e){log('s','FEHLER: '+e.message)}
@@ -483,6 +506,9 @@ function renderPL(){
   const win=all.filter(x=>x.pnl>0).sort((a,b)=>b.pnl-a.pnl).slice(0,10),loss=all.filter(x=>x.pnl<=0).sort((a,b)=>a.pnl-b.pnl).slice(0,10);
   $('winBody').innerHTML=win.map(row).join('');$('winEmpty').style.display=win.length?'none':'';
   $('lossBody').innerHTML=loss.map(row).join('');$('lossEmpty').style.display=loss.length?'none':'';
+  const rs={};for(const t of S.closed){const r=rs[t.reason]||(rs[t.reason]={n:0,s:0});r.n++;r.s+=t.pnl}
+  $('reasonBody').innerHTML=Object.entries(rs).sort((a,b)=>a[1].s-b[1].s).map(([k,r])=>`<tr><td>${esc(k)}</td><td class="n">${r.n}</td><td class="n ${r.s>=0?'up':'down'}">${r.s>=0?'+':''}${eur(r.s)}</td></tr>`).join('');
+  $('reasonWrap').style.display=Object.keys(rs).length?'':'none';
   $('plInfo').textContent=all.length?`${all.length} Trades · offen ${eur(sum(op))}`:''}
 const pcv=$('plChart');
 function drawPL(){
@@ -530,7 +556,8 @@ $('mYes').onclick=()=>{const st=S.settings,r=S.eurRate,run=S.running;S=fresh(st)
 function initCapital(){S.startUsd=S.settings.capital/S.eurRate;S.cash=S.startUsd;S.equity=[[now(),S.startUsd]]}
 
 let timer=null;
-function setRun(on){S.running=on;clearInterval(timer);if(on){log('i','Desk gestartet');timer=setInterval(tick,10000);tick()}else log('i','Desk pausiert');save();render()}
+let rtimer=null;
+function setRun(on){S.running=on;clearInterval(timer);clearInterval(rtimer);if(on){S.brake=equityUsd();log('i','Desk gestartet');timer=setInterval(tick,10000);rtimer=setInterval(riskTick,3000);tick()}else log('i','Desk pausiert');save();render()}
 $('runBtn').onclick=()=>setRun(!S.running);
 
 let lock=null;
@@ -545,7 +572,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
   if(S.cash==null)initCapital();
   if(!S.logs.some(l=>/Base und BSC/.test(l.msg)))log('i','Update: Base und BSC sind jetzt dabei (Sicherheitscheck über GoPlus)');
   save();renderSettings();render();
-  if(S.running){timer=setInterval(tick,10000);tick()}})();
+  if(S.running){timer=setInterval(tick,10000);rtimer=setInterval(riskTick,3000);tick()}})();
 window.__desk={get S(){return S},tick,analyse,verdict};
 }
 </script>
