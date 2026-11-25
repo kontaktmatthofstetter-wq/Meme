@@ -7,12 +7,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Meta-Bot">
 <meta name="theme-color" content="#07100c">
-<title>Max-Bot</title>
+<title>Max-Bot Live</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#07100c;--card:#0d1813;--card2:#122019;--line:#1c2e25;--ink:#e8f3ec;--mute:#7f978a;--up:#3ee08f;--down:#ff5d5d;--warn:#f2c14e;--blue:#5aa8ff;--violet:#a98bff}
+:root{--bg:#000;--card:#0b0b0b;--card2:#151515;--line:#1f1f1f;--ink:#f2f2f2;--mute:#8a8a8a;--up:#22c55e;--down:#ef4444;--warn:#f2c14e;--blue:#5aa8ff;--violet:#a98bff}
 *{box-sizing:border-box;min-width:0}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
 body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);overflow-x:clip}
@@ -102,6 +102,16 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
 .params{font-size:12px;color:var(--mute);margin-top:6px;line-height:1.55}.params b{color:var(--ink);font-weight:600}
 #lnCard,#btCard,#setCard{display:none!important}
+.hero{background:#0b0b0b!important}.logo{background:#22c55e!important;color:#000!important}
+.mult{background:#22c55e!important;color:#000!important}.mult.neg{background:#ef4444!important}
+.reg.bull{background:#0f2a18!important}.reg.bear{background:#2a0f0f!important}
+.ctab{display:flex;gap:6px;flex-wrap:wrap}.ctab button{min-height:40px;min-width:52px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:#111;font-weight:700;cursor:pointer;color:var(--ink)}
+.ctab button.on{background:#22c55e;color:#000;border:0}
+.cfig{position:relative;height:380px;margin-top:8px}.cfig canvas{position:absolute;inset:0;width:100%;height:100%}
+@media(max-width:600px){.cfig{height:300px}}
+.ov{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}@media(max-width:600px){.ov{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ov div{background:#111;border-radius:12px;padding:10px;font-size:12px;color:var(--mute)}.ov b{display:block;color:var(--ink);font-size:17px;font-variant-numeric:tabular-nums}
+.lev{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:800;font-size:12px;background:#22c55e;color:#000}.lev.s{background:#ef4444}
 </style>
 </head>
 <body>
@@ -124,6 +134,21 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
   <div class="fig"><canvas id="chart"></canvas></div>
   <div class="params" id="brakeTxt"></div>
 </section>
+
+<div class="card" style="margin-top:12px">
+  <h2><span id="chT" style="color:var(--ink);font-size:15px;font-weight:700">Chart</span> <span id="chS"></span></h2>
+  <div class="row" style="margin-top:0"><div class="ctab" id="cTabs"></div><div class="ctab" id="tTabs"></div></div>
+  <div class="cfig"><canvas id="cand"></canvas></div>
+  <div class="legend" style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--mute);margin-top:6px"><span style="color:#22c55e">▲ Long / Kauf</span><span style="color:#ef4444">▼ Short</span><span style="color:#facc15">◆ Nachkauf</span><span>● Ausstieg (grün = Gewinn, rot = Verlust)</span><span>- - Einstieg / Stop</span></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <h2>Übersicht: Wo ist der Bot drin? <span id="ovInfo"></span></h2>
+  <div class="ov" id="ovKpi"></div>
+  <div class="scroll"><table><thead><tr><th>Coin</th><th>System</th><th>Richtung</th><th class="n">Hebel</th><th class="n">Eigenes Geld</th><th class="n">Positionsgröße</th><th class="n">Einstieg</th><th class="n">Stop</th><th class="n">Ergebnis</th></tr></thead><tbody id="ovBody"></tbody></table></div>
+  <div class="empty" id="ovEmpty">Gerade keine Position offen – der Bot wartet auf das nächste Signal.</div>
+  <p class="note">Automatik: Jeder Einsatz wird in Prozent vom aktuellen Konto berechnet. Wächst das Konto, werden die Positionen automatisch größer (Zinseszins) – schrumpft es, kleiner.</p>
+</div>
 
 <div class="sl" id="sleeves"></div>
 
@@ -282,11 +307,12 @@ function eqOf(a,c){if(!a.pos)return a.cash;const p=a.pos,pr=M[c].price||p.mid;
   const ex=pr*(1-p.side*SLIP);return a.cash+Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
 function total(){let s=0;for(const k in SLV)for(const c of COINS)s+=eqOf(S.acc[k][c],c);return s}
 function brakeOn(){return (S.peak-total())/S.peak*100>S.settings.brake}
-function closePos(k,c,reason){const a=S.acc[k][c],p=a.pos;if(!p)return;const before=eqOf(a,c);a.cash=before;a.pos=null;const pnl=before-p.cap0;
+function addEv(o){(S.ev=S.ev||[]).push({t:now(),...o});if(S.ev.length>800)S.ev.splice(0,S.ev.length-800)}
+function closePos(k,c,reason){const a=S.acc[k][c],p=a.pos;if(!p)return;const before=eqOf(a,c);addEv({c,k,io:'out',side:p.side,px:M[c].price,pnl:before-p.cap0,why:reason});a.cash=before;a.pos=null;const pnl=before-p.cap0;
   S.closed.unshift({k,c,side:p.side,reason,pnl,t:now()});if(S.closed.length>300)S.closed.length=300;
   if(k==='A'&&pnl<0)S.cool[c]=now()+3*4*3600e3;log(pnl>=0?'b':'k',`${SLV[k].n} · ${c} ${reason} · ${pnl>=0?'+':''}${eur(pnl)}`)}
 function openSpot(k,c,frac,why){const a=S.acc[k][c],pr=M[c].price,size=a.cash*frac;if(size<1)return;
-  const q=size*(1-FEE)/(pr*(1+SLIP));a.pos={kind:'spot',side:1,qty:q,mid:pr,cap0:a.cash,t:now()};a.cash-=size;log('b',`${SLV[k].n} · ${c} KAUF @ ${px(pr)} · ${eur(size)} · ${why}`)}
+  const q=size*(1-FEE)/(pr*(1+SLIP));a.pos={kind:'spot',side:1,qty:q,mid:pr,cap0:a.cash,t:now()};a.cash-=size;addEv({c,k,io:'in',side:1,px:pr,why,amt:size});log('b',`${SLV[k].n} · ${c} KAUF @ ${px(pr)} · ${eur(size)} · ${why}`)}
 function tick(c){ // Stops von A sekündlich prüfen
   const a=S.acc.A[c],p=a.pos;if(!p)return;const pr=M[c].price,sd=p.side;p.best=sd>0?Math.max(p.best,pr):Math.min(p.best,pr);
   if(sd*(pr-p.sl)<=0)closePos('A',c,p.trail?'Trailing-Stop':'Stop-Loss')}
@@ -301,7 +327,7 @@ function stepA(c,cs){
   if(a.pos){const p=a.pos,sd=p.side;if(p.kind==='lev'){p.fund+=sd>0?p.qty*x.c*FUND*0.5:0;
       if(sd*(p.best-p.mid)>=p.R)p.be=true;const t=p.best-sd*3*atr;if(p.be&&sd*(t-p.sl)>0){p.sl=t;if(!p.trail)log('i',`A · ${c}: +1R – Trailing-Stop läuft (${px(t)})`);p.trail=true}
       const ad=p.adds||0;if(S.settings.pyr!==false&&ad<(S.settings.adds||2)&&sd*(x.c-p.mid)>=(ad+1)*p.R){const q0=p.q0||p.qty,eqA=eqOf(a,c),maxN=eqA*5*0.95,addN=Math.min(0.5*q0*x.c,maxN-p.qty*x.c),mg=addN/5;
-        if(addN>0&&mg>=1&&a.cash>=mg+addN*FFEE){const f=x.c*(1+sd*SLIP),aq=addN/f;p.q0=q0;p.entry=(p.entry*p.qty+f*aq)/(p.qty+aq);p.qty+=aq;p.margin+=mg;a.cash-=mg+addN*FFEE;p.adds=ad+1;
+        if(addN>0&&mg>=1&&a.cash>=mg+addN*FFEE){const f=x.c*(1+sd*SLIP),aq=addN/f;p.q0=q0;p.entry=(p.entry*p.qty+f*aq)/(p.qty+aq);p.qty+=aq;p.margin+=mg;a.cash-=mg+addN*FFEE;p.adds=ad+1;p.nk=(p.nk||0)+1;p.lev=p.qty*x.c/eqOf(a,c);addEv({c,k:'A',io:'add',side:sd,px:x.c,why:'Nachkauf '+(ad+1),amt:mg});
           log('b',`A · ${c} Nachkauf ${ad+1} @ ${px(x.c)} · +${ad+1}R im Plus · ${eur(addN)} dazu, Stop bleibt gemeinsam`)}else p.adds=99}}return}
   if((S.cool[c]||0)>now())return;
   if(learnOn()){if(!ensureLearn())return;const P=LRN.P[c],i=P.i4.get(x.t);if(i==null)return;const bull=LRN.bullAt(x.t+4*3600e3);let best=null;
@@ -327,7 +353,7 @@ function stepA(c,cs){
   const pr=M[c].price||x.c,stop=2*atr,eq=a.cash,risk=eq*rp/100*(brakeOn()?0.5:1);
   let notional=Math.min(risk/(stop/pr+2*FFEE+2*SLIP),eq*cap*0.95);const margin=notional/cap;if(margin<1)return;
   const fill=pr*(1+sd*SLIP);a.pos={kind:'lev',side:sd,qty:notional/fill,margin,lev:notional/eq,sc,entry:fill,mid:pr,sl:pr-sd*stop,R:stop,best:pr,be:false,trail:false,fund:0,cap0:a.cash,t:now()};
-  a.cash-=margin+notional*FFEE;log('b',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(pr)} · ${auto?`Sicherheit ${sc}/3 → Hebel ${(notional/eq).toFixed(1)}x · `:''}Position ${eur(notional)} · Stop ${px(pr-sd*stop)} (${why})`)}
+  a.cash-=margin+notional*FFEE;addEv({c,k:'A',io:'in',side:sd,px:pr,lev:notional/eq,why,amt:margin});log('b',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(pr)} · ${auto?`Sicherheit ${sc}/3 → Hebel ${(notional/eq).toFixed(1)}x · `:''}Position ${eur(notional)} · Stop ${px(pr-sd*stop)} (${why})`)}
 function stepB(c,cs){
   const a=S.acc.B[c],cl=cs.map(x=>x.c),n=cl.length-1,r2=rsiA(cl,2)[n],s200=sma(cl,200,n),s5=sma(cl,5,n);
   if(a.pos){if(cl[n]>s5)closePos('B',c,'Schluss über 5-Tage-Schnitt');return}
@@ -343,12 +369,41 @@ function stepC(c,cs){
   const diff=(target-cur)*eq,fee=Math.abs(diff)*(FEE+SLIP);
   const qty=target*eq/pr;const cap0=a.pos?a.pos.cap0:eq;
   if(target===0){closePos('C',c,rg.bull?'Momentum weg':'Bärenmodus – raus');return}
+  if(target>cur)addEv({c,k:'C',io:'in',side:1,px:pr,why:`Momentum ${Math.round(target*100)} %`,amt:diff});
   a.cash=eq-target*eq-fee;a.pos={kind:'spot',side:1,qty:qty,mid:a.pos?a.pos.mid:pr,cap0,t:a.pos?a.pos.t:now()};
   log('i',`C · ${c}: Anteil ${Math.round(cur*100)} % → ${Math.round(target*100)} %${rg.bull?'':' (Bärenmodus)'}`)}
 
 /* ---------- Anzeige ---------- */
 let dirty=true;const BT=JSON.parse($('btData').textContent);
 function renderConn(){const m={live:['ok','Live'],connecting:['wait','Verbinde…'],poll:['wait','Notbetrieb'],err:['err','Getrennt'],off:['','Getrennt']}[wsState];$('wsDot').className='dot '+m[0];$('wsTxt').textContent=m[1]}
+let cCoin='BTC',cTf='4h';
+function drawCand(){const cv=$('cand'),W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W)return;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.fillStyle='#000';g.fillRect(0,0,W,H);
+  const all=cTf==='4h'?M[cCoin].h4:M[cCoin].d1;$('chT').textContent=`${cCoin}/USDT · ${M[cCoin].price?px(M[cCoin].price):''}`;$('chS').textContent=cTf==='4h'?'4-Stunden-Kerzen':'Tageskerzen';
+  if(!all||all.length<5){g.fillStyle='#8a8a8a';g.font='13px Inter,sans-serif';g.fillText('Lädt Kerzen… (auf Start tippen)',12,24);return}
+  const N=W<520?60:110,cs=all.slice(-N),R=62,cw=(W-R)/N,step=cTf==='4h'?4*3600e3:864e5,t0=cs[0].t;
+  const cl=all.map(x=>x.c),e50=ema(cl,50).slice(-N),e200=all.length>200?ema(cl,200).slice(-N):null;
+  const ov=[];for(const k of ['A','B','C']){const p=S.acc[k][cCoin].pos;if(!p)continue;ov.push({y:p.entry||p.mid,c:'#e5e5e5',l:`${k} Einstieg`});if(p.sl)ov.push({y:p.sl,c:'#ef4444',l:p.trail?'Trailing-Stop':'Stop'})}
+  let lo=Math.min(...cs.map(x=>x.l)),hi=Math.max(...cs.map(x=>x.h));for(const o of ov)if(o.y>lo-(hi-lo)*.4&&o.y<hi+(hi-lo)*.4){lo=Math.min(lo,o.y);hi=Math.max(hi,o.y)}
+  const pad=(hi-lo)*.06;lo-=pad;hi+=pad;const y=v=>8+(hi-v)/(hi-lo)*(H-26);g.font='10px Inter,sans-serif';
+  for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5;g.strokeStyle='#161616';g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle='#6b6b6b';g.fillText(px(v),W-R+5,y(v)+3)}
+  for(const o of ov){if(o.y<lo||o.y>hi)continue;g.strokeStyle=o.c;g.setLineDash([5,4]);g.beginPath();g.moveTo(0,y(o.y));g.lineTo(W-R,y(o.y));g.stroke();g.setLineDash([]);g.fillStyle=o.c;g.fillText(o.l,4,y(o.y)-3)}
+  cs.forEach((x,i)=>{const up=x.c>=x.o,cx=i*cw+cw/2;g.strokeStyle=g.fillStyle=up?'#22c55e':'#ef4444';g.beginPath();g.moveTo(cx,y(x.h));g.lineTo(cx,y(x.l));g.stroke();g.fillRect(cx-Math.max(1,cw*.34),y(Math.max(x.o,x.c)),Math.max(2,cw*.68),Math.max(1,Math.abs(y(x.o)-y(x.c))))});
+  for(const [a,c] of [[e50,'#facc15'],[e200,'#ffffff55']]){if(!a)continue;g.strokeStyle=c;g.lineWidth=1.3;g.beginPath();a.forEach((v,i)=>{const X=i*cw+cw/2;i?g.lineTo(X,y(v)):g.moveTo(X,y(v))});g.stroke();g.lineWidth=1}
+  for(const e of (S.ev||[]).filter(e=>e.c===cCoin)){if(e.t<t0)continue;const i=Math.min(N-1,Math.floor((e.t-t0)/step)),X=i*cw+cw/2,Y=y(e.px);if(Y<0||Y>H)continue;
+    if(e.io==='out'){g.fillStyle=e.pnl>=0?'#22c55e':'#ef4444';g.beginPath();g.arc(X,Y,4,0,7);g.fill();g.strokeStyle='#000';g.stroke()}
+    else if(e.io==='add'){g.fillStyle='#facc15';g.beginPath();g.moveTo(X,Y-6);g.lineTo(X+5,Y);g.lineTo(X,Y+6);g.lineTo(X-5,Y);g.fill()}
+    else{g.fillStyle=e.side>0?'#22c55e':'#ef4444';g.beginPath();if(e.side>0){g.moveTo(X,Y+3);g.lineTo(X-6,Y+13);g.lineTo(X+6,Y+13)}else{g.moveTo(X,Y-3);g.lineTo(X-6,Y-13);g.lineTo(X+6,Y-13)}g.fill();
+      if(e.lev){g.fillStyle='#fff';g.font='bold 10px Inter,sans-serif';g.fillText(e.lev.toFixed(1)+'x',X+7,e.side>0?Y+14:Y-6);g.font='10px Inter,sans-serif'}}}
+  const lp=M[cCoin].price;if(lp>lo&&lp<hi){g.fillStyle='#22c55e';g.fillRect(W-R,y(lp)-8,R,16);g.fillStyle='#000';g.fillText(px(lp),W-R+5,y(lp)+3)}}
+function renderOv(){const rows=[];let margin=0,expo=0;const tot=total();
+  for(const k of ['A','B','C'])for(const c of COINS){const a=S.acc[k][c],p=a.pos;if(!p)continue;const pr=M[c].price||p.mid,val=eqOf(a,c)-a.cash,notional=p.qty*pr,own=p.kind==='lev'?p.margin:notional,lev=p.kind==='lev'?notional/Math.max(1e-9,eqOf(a,c)):notional/Math.max(1e-9,eqOf(a,c)),res=eqOf(a,c)-p.cap0;
+    margin+=own;expo+=notional;rows.push(`<tr><td><b>${c}</b></td><td>${SLV[k].n.split(' · ')[1]||k}</td><td class="${p.side>0?'up':'down'}">${p.side>0?'Long':'Short'}${p.nk?` +${p.nk} Nachkauf`:''}</td><td class="n"><span class="lev${p.side<0?' s':''}">${lev.toFixed(1)}x</span></td><td class="n">${eur(own)}</td><td class="n">${eur(notional)}</td><td class="n">${px(p.entry||p.mid)}</td><td class="n">${p.sl?px(p.sl):'–'}</td><td class="n ${res>=0?'up':'down'}">${res>=0?'+':''}${eur(res)}</td></tr>`)}
+  $('ovBody').innerHTML=rows.join('');$('ovEmpty').style.display=rows.length?'none':'';
+  $('ovKpi').innerHTML=`<div>Konto gesamt<b>${eur(tot)}</b></div><div>Davon eingesetzt<b>${eur(margin)}</b></div><div>Positionen insgesamt<b>${eur(expo)}</b></div><div>Gesamthebel<b>${(expo/Math.max(1,tot)).toFixed(2).replace('.',',')}x</b></div>`;
+  $('ovInfo').textContent=rows.length?`${rows.length} offen`:'';
+  $('cTabs').innerHTML=COINS.map(c=>`<button type="button" data-c="${c}" class="${c===cCoin?'on':''}">${c}</button>`).join('');
+  $('tTabs').innerHTML=[['4h','4h'],['1d','Tag']].map(([v,l])=>`<button type="button" data-t="${v}" class="${v===cTf?'on':''}">${l}</button>`).join('')}
+document.addEventListener('click',e=>{const b=e.target.closest('#cTabs [data-c]');if(b){cCoin=b.dataset.c;dirty=true}const t=e.target.closest('#tTabs [data-t]');if(t){cTf=t.dataset.t;dirty=true}});
 function render(){
   const tot=total(),pnl=tot-S.start,m=tot/S.start;S.peak=Math.max(S.peak,tot);
   const [a,b]=eur(tot).split(',');$('eq').innerHTML=esc(a)+'<small>,'+esc(b)+'</small>';
@@ -374,7 +429,7 @@ function render(){
     const f=Object.keys(LRN.st).filter(k=>!k.startsWith('T:')&&k!=='ALL').map(k=>({l:k,n:LRN.st[k].n,d:Lm(k)-Lm('ALL')})).sort((a,b)=>b.d-a.d);
     const fm=a=>a.map(x=>`${esc(x.l)} <b class="${x.d>=0?'up':'down'}">${x.d>=0?'+':''}${x.d.toFixed(2).replace('.',',')}R</b> <span class="mute">(${x.n}×)</span>`).join('<br>')||'noch zu wenig Daten';
     $('lnGood').innerHTML=fm(f.filter(x=>x.d>0.02).slice(0,5));$('lnBad').innerHTML=fm(f.filter(x=>x.d<-0.02).slice(-5).reverse());$('lnInfo').textContent=`${Ln('ALL')} Schatten-Trades`}else $('lnCard').style.display='none';
-  drawEq();drawBT()}
+  drawEq();drawBT();renderOv();drawCand()}
 function canv(cv){const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W)return null;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);return{g,W,H}}
 function drawEq(){const o=canv($('chart'));if(!o)return;const {g,W,H}=o,pts=S.equity.length?S.equity:[[now(),S.start]],v=pts.map(p=>p[1]),st=S.start;
   let lo=Math.min(st,...v),hi=Math.max(st,...v);if(hi-lo<st*0.004){hi+=st*0.002;lo-=st*0.002}const x=i=>pts.length<2?W:i/(pts.length-1)*(W-6),y=q=>H-6-(q-lo)/(hi-lo)*(H-12);
