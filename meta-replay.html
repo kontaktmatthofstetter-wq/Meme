@@ -125,6 +125,8 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <label>Festes Risiko pro Trend-Trade (%)<input id="cRisk" type="number" inputmode="decimal" step="0.5" value="3"></label>
     <label>Stop-Filter (ADX + Bandbreite)<select id="cFilt"><option value="1" selected>An – neue Version</option><option value="0">Aus – alte Version</option></select></label>
     <label>Wende-Ausbruch (Long)<select id="cBrk"><option value="1" selected>An – fängt verpasste Rallyes</option><option value="0">Aus</option></select></label>
+    <label>Modus<select id="cMode"><option value="learn" selected>Selbstlernend – startet ohne Wissen</option><option value="fix">Feste Regeln (mit Vorwissen)</option></select></label>
+    <label>Vorlauf (Selbstlernend)<select id="cWarm"><option value="1" selected>Lernt vorher aus dem Jahr davor</option><option value="0">Startet bei null</option></select></label>
     <label>Risikostufe<select id="cLvl"><option value="1">Normal (×1)</option><option value="1.5">Erhöht (×1,5)</option><option value="2">Aggressiv (×2)</option><option value="3">Hoch (×3)</option><option value="4" selected>Maximum (×4)</option></select></label>
     <label>Hebel-Automatik<select id="cAuto"><option value="1" selected>An – Hebel nach Sicherheit</option><option value="0">Aus – festes Risiko</option></select></label>
   </div>
@@ -165,6 +167,13 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
   <div class="sub" id="pcTip" style="margin-top:8px;min-height:20px"></div>
 </div>
 
+<div class="card" style="margin-top:12px" id="learnCard">
+  <h2>Was der Bot selbst gelernt hat <span id="lnInfo"></span></h2>
+  <div class="scroll"><table><thead><tr><th>Signal</th><th class="n">Beobachtet</th><th class="n">Ø Ergebnis</th></tr></thead><tbody id="lnBody"></tbody></table></div>
+  <div class="grid" style="margin-top:6px"><div><h2 class="up" style="font-size:14px">Wann es gut läuft</h2><div id="lnGood" class="sub"></div></div><div><h2 class="down" style="font-size:14px">Wann es schlecht läuft</h2><div id="lnBad" class="sub"></div></div></div>
+  <p class="note">Mit Vorlauf hat er vor dem Start ein Jahr Vergangenheit studiert (nur Daten vor dem Startdatum). Danach spielt er jedes Signal im Hintergrund als Schatten-Trade mit und lernt daraus – nur mit Daten, die zu diesem Zeitpunkt schon vergangen waren. Echt gehandelt wird erst, wenn ein Signal mindestens 15-mal beobachtet wurde und einen Vorteil zeigt.</p>
+</div>
+
 <div class="grid">
   <div class="card"><h2>Trades <span id="trInfo"></span></h2><div class="log feed" id="feed"><div class="i">Hier läuft jeder Trade mit Datum durch.</div></div></div>
   <div class="card"><h2>Woher kommt der Gewinn?</h2>
@@ -192,7 +201,7 @@ async function klines(sym,iv,start,end,onp){const step=iv==='4h'?H4:DAY;let t=st
   while(t<end){let j=null;for(const b of ['https://data-api.binance.vision','https://api.binance.com']){try{const r=await fetch(`${b}/api/v3/klines?symbol=${sym}&interval=${iv}&startTime=${t}&limit=1000`,{cache:'no-store'});if(r.ok){j=await r.json();break}}catch(e){}}
     if(!j)throw new Error('Binance nicht erreichbar');if(!j.length)break;for(const k of j)out.push({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]});t=j[j.length-1][0]+step;onp&&onp();if(j.length<1000)break}
   if(out.length&&out[out.length-1].t+step>Date.now())out.pop();return out}
-async function loadAll(days,onp){const key=days;if(cache[key])return cache[key];const end=Date.now(),s4=end-days*DAY-260*H4,sd=end-days*DAY-320*DAY;const D={};let n=0,tot=COINS.length*2;
+async function loadAll(days,onp){const key=days;if(cache[key])return cache[key];const end=Date.now(),s4=end-days*DAY-400*DAY-260*H4,sd=end-days*DAY-400*DAY-320*DAY;const D={};let n=0,tot=COINS.length*2;
   for(const c of COINS){D[c]={h4:await klines(c+'USDT','4h',s4,end),d1:await klines(c+'USDT','1d',sd,end)};onp(++n/tot*0.5+0.5*n/tot)}
   return cache[key]=D}
 
@@ -205,7 +214,33 @@ function adxA(cs){const n=cs.length,pd=[0],md=[0],tr=[cs[0].h-cs[0].l];for(let i
   const a=rma(tr,14),p=rma(pd,14),m=rma(md,14),dx=Array.from(p,(x,i)=>{const P=100*x/a[i],M=100*m[i]/a[i];return 100*Math.abs(P-M)/Math.max(P+M,1e-12)});return rma(dx,14)}
 function bwpA(cl){const n=cl.length,bw=new Float64Array(n).fill(NaN);let s=0,q=0;for(let i=0;i<n;i++){s+=cl[i];q+=cl[i]*cl[i];if(i>=20){s-=cl[i-20];q-=cl[i-20]*cl[i-20]}if(i>=19){const m=s/20;bw[i]=4*Math.sqrt(Math.max(0,q/20-m*m))/m}}
   const o=new Float64Array(n).fill(0);for(let i=0;i<n;i++){if(isNaN(bw[i]))continue;let le=0,k=0;for(let j=Math.max(19,i-119);j<=i;j++){k++;if(bw[j]<=bw[i])le++}o[i]=le/k}return o}
+function pctRank(v,w=120){const o=new Float64Array(v.length).fill(0.5);for(let i=0;i<v.length;i++){let le=0,k=0;for(let j=Math.max(0,i-w+1);j<=i;j++){if(isNaN(v[j]))continue;k++;if(v[j]<=v[i])le++}o[i]=k?le/k:0.5}return o}
 function atrA(cs){return rma(cs.map((x,i)=>i?Math.max(x.h-x.l,Math.abs(x.h-cs[i-1].c),Math.abs(x.l-cs[i-1].c)):x.h-x.l),14)}
+
+/* ---------- Selbstlern-Modus: startet ohne Wissen ---------- */
+const TYPES={pL:'Rücksetzer Long',pS:'Rücksetzer Short',bL:'Ausbruch Long',bS:'Ausbruch Short'},KS=20;
+function Ladd(k,r){const o=X.L.st[k]||(X.L.st[k]={n:0,s:0});o.n++;o.s+=r}
+function Lm(k){const o=X.L.st[k];return o?o.s/(o.n+KS):0}
+function Ln(k){return X.L.st[k]?X.L.st[k].n:0}
+function feats(P,i,x,sd,bull){const ad=P.adx[i],bw=P.bwp[i],vr=x.v/P.av20[i],ap=P.atp[i];
+  return['Trendstärke '+(ad<20?'schwach':ad<30?'mittel':'stark'),'Bandbreite '+(bw<1/3?'eng':bw<2/3?'mittel':'weit'),'Volumen '+(vr<1.2?'normal':vr<2?'erhöht':'stark'),'Schwankung '+(ap<1/3?'ruhig':ap<2/3?'mittel':'wild'),'BTC-Phase '+((bull?1:-1)===sd?'passt':'dagegen')]}
+function predict(type,fs){let e=Lm('T:'+type);const all=Lm('ALL');for(const f of fs)e+=Lm(f)-all;return e}
+function signals(P,i,x){const s=[];if(i<210)return s;const up=x.c>P.e200[i]&&P.e50[i]>P.e200[i],dn=x.c<P.e200[i]&&P.e50[i]<P.e200[i],vol=x.v>1.2*P.av20[i];
+  if(up&&Math.min(P.h[i].l,P.h[i-1].l,P.h[i-2].l)<=P.e50[i]*1.002&&x.c>P.e21[i]&&x.c>x.o&&P.r14[i]<70)s.push(['pL',1]);
+  if(dn&&Math.max(P.h[i].h,P.h[i-1].h,P.h[i-2].h)>=P.e50[i]*0.998&&x.c<P.e21[i]&&x.c<x.o&&P.r14[i]>30)s.push(['pS',-1]);
+  if(x.c>P.hi30[i]&&P.e21[i]>P.e50[i]&&vol)s.push(['bL',1]);
+  if(x.c<P.lo30[i]&&P.e21[i]<P.e50[i]&&vol)s.push(['bS',-1]);return s}
+function shadowStep(c,P,i,x,bull,end){ // Schatten-Trades verwalten und daraus lernen
+  for(const ty in TYPES){const key=c+ty,s=X.L.sh[key];if(!s)continue;const sd=s.sd;
+    let ex=null;if(sd>0?x.l<=s.sl:x.h>=s.sl)ex=sd>0?Math.min(x.o,s.sl):Math.max(x.o,s.sl);
+    if(ex!=null){const r=sd*(ex-s.mid)/s.R-2*(FFEE+SLIP)*s.mid/s.R;Ladd('ALL',r);Ladd('T:'+ty,r);for(const f of s.fs)Ladd(f,r);X.L.sh[key]=null;continue}
+    s.best=sd>0?Math.max(s.best,x.h):Math.min(s.best,x.l);if(sd*(s.best-s.mid)>=s.R)s.be=true;const tr=s.best-sd*3*P.atr[i];if(s.be&&sd*(tr-s.sl)>0)s.sl=tr}
+  const out=[];for(const [ty,sd] of signals(P,i,x)){const fs=feats(P,i,x,sd,bull);out.push({ty,sd,fs});const key=c+ty;
+    if(!X.L.sh[key]){const R2=2*P.atr[i];X.L.sh[key]={sd,mid:x.c,sl:x.c-sd*R2,R:R2,best:x.c,be:false,fs}}}
+  return out}
+function learnedTable(){const rows=[];for(const ty in TYPES){const n=Ln('T:'+ty);rows.push({l:TYPES[ty],n,m:n?X.L.st['T:'+ty].s/n:0})}
+  const f=Object.keys(X.L.st).filter(k=>!k.startsWith('T:')&&k!=='ALL').map(k=>({l:k,n:X.L.st[k].n,m:X.L.st[k].s/X.L.st[k].n,d:Lm(k)-Lm('ALL')})).sort((a,b)=>b.d-a.d);
+  return{rows,f,b:X.L.b}}
 
 /* ---------- Simulation ---------- */
 let X=null,running=false,speed=3,last=0,acc=0;
@@ -213,11 +248,19 @@ function prepare(D,days,capEur,risk){
   const start=Date.now()-days*DAY,cap=capEur/RATE,P={};
   for(const c of COINS){const h=D[c].h4,d=D[c].d1,cl=h.map(x=>x.c),dc=d.map(x=>x.c);
     const tsm=dc.map((x,i)=>{let w=0;for(const k of [10,20,30,60,90])if(i>=k&&x>dc[i-k])w++;return w/5});
-    P[c]={h,d,i4:new Map(h.map((x,i)=>[x.t,i])),iD:new Map(d.map((x,i)=>[x.t,i])),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:atrA(h),r14:rsiA(cl,14),adx:adxA(h),bwp:bwpA(cl),hi30:h.map((x,i)=>{let m=-Infinity;for(let j=Math.max(0,i-30);j<i;j++)m=Math.max(m,h[j].h);return m}),av20:h.map((x,i)=>{let s=0;for(let j=Math.max(0,i-20);j<i;j++)s+=h[j].v;return s/Math.max(1,Math.min(20,i))}),r2:rsiA(dc,2),s200:smaA(dc,200),s5:smaA(dc,5),tsm}}
+    const at=atrA(h);P[c]={atp:pctRank(Array.from(at,(v,i)=>v/cl[i])),h,d,i4:new Map(h.map((x,i)=>[x.t,i])),iD:new Map(d.map((x,i)=>[x.t,i])),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:atrA(h),r14:rsiA(cl,14),adx:adxA(h),bwp:bwpA(cl),lo30:h.map((x,i)=>{let m=Infinity;for(let j=Math.max(0,i-30);j<i;j++)m=Math.min(m,h[j].l);return m}),hi30:h.map((x,i)=>{let m=-Infinity;for(let j=Math.max(0,i-30);j<i;j++)m=Math.max(m,h[j].h);return m}),av20:h.map((x,i)=>{let s=0;for(let j=Math.max(0,i-20);j<i;j++)s+=h[j].v;return s/Math.max(1,Math.min(20,i))}),r2:rsiA(dc,2),s200:smaA(dc,200),s5:smaA(dc,5),tsm}}
   const tl=P.BTC.h.map(x=>x.t).filter(t=>t>=start);
   const acc={};for(const k in W){acc[k]={};for(const c of COINS)acc[k][c]={cash:cap*W[k]/6,pos:null}}
   const bh0={};for(const c of COINS){const i=P[c].i4.get(tl[0]);bh0[c]=P[c].h[i??0].c}
-  return{P,tl,k:0,acc,cap,risk,ev:[],filt:$('cFilt').value==='1',brk:$('cBrk').value==='1',auto:$('cAuto').value==='1',lvl:+$('cLvl').value,skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
+  X={P,tl,L:{st:{},sh:{},bS:{},b:{n:0,s:0},cS:[],t0:tl[0]}};
+  if($('cMode').value==='learn'&&$('cWarm').value==='1'){const pre=P.BTC.h.map(x=>x.t).filter(t=>t>=start-365*DAY&&t<start);X.L.t0=pre[0]??tl[0];
+    for(const T of pre){const end=T+H4;const bj=P.BTC.iD.get(Math.floor(end/DAY)*DAY-DAY),bull=bj!=null&&regimeAt(bj);
+      for(const c of COINS){const Q=P[c],i=Q.i4.get(T);if(i==null)continue;const x=Q.h[i];shadowStep(c,Q,i,x,bull,end);
+        if(end%DAY===0){const j=Q.iD.get(end-DAY);if(j==null||j<1)continue;const d=Q.d[j],sb=X.L.bS[c];
+          if(sb&&d.c>Q.s5[j]){X.L.b.n++;X.L.b.s+=d.c/sb-1-2*(FEE+SLIP);X.L.bS[c]=null}else if(!sb&&d.c>Q.s200[j]&&Q.r2[j]<10)X.L.bS[c]=d.c;
+          const tg0=bull?Q.tsm[j]:0,prev=X.L['cT'+c]||0;X.L.cS.push([end,prev*(d.c/Q.d[j-1].c-1)/6]);X.L['cT'+c]=tg0;while(X.L.cS.length&&X.L.cS[0][0]<end-180*DAY)X.L.cS.shift()}}}}
+  const Lpre=X.L;
+  return{P,tl,k:0,acc,cap,risk,ev:[],learn:$('cMode').value==='learn',L:Lpre,filt:$('cFilt').value==='1',brk:$('cBrk').value==='1',auto:$('cAuto').value==='1',lvl:+$('cLvl').value,skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
 function posVal(p,pr){if(p.kind==='spot')return p.qty*pr*(1-SLIP)*(1-FEE);const ex=pr*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
 function aEq(a,pr){return a.cash+(a.pos?posVal(a.pos,pr):0)}
 function total(){let s=0;for(const k in W)for(const c of COINS)s+=aEq(X.acc[k][c],X.price[c]||0);return s}
@@ -234,7 +277,14 @@ function step(){
     if(p){const sd=p.side;if(sd>0)p.fund+=p.qty*x.c*FUND*0.5;
       if(sd>0?x.l<=p.sl:x.h>=p.sl){close('A',c,sd>0?Math.min(x.o,p.sl):Math.max(x.o,p.sl),p.trail?'Trailing-Stop':'Stop-Loss',end)}
       else{p.best=sd>0?Math.max(p.best,x.h):Math.min(p.best,x.l);if(sd*(p.best-p.mid)>=p.R)p.be=true;const tr=p.best-sd*3*P.atr[i];if(p.be&&sd*(tr-p.sl)>0){p.sl=tr;p.trail=true}}}
-    if(!a.pos&&i>=210&&!((X.cool[c]||0)>end)){
+    const bjA=X.P.BTC.iD.get(Math.floor(end/DAY)*DAY-DAY),bullA=bjA!=null&&regimeAt(bjA);
+    if(X.learn){const sigs=shadowStep(c,P,i,x,bullA,end);
+      if(!a.pos&&!((X.cool[c]||0)>end)&&sigs.length){let best=null;for(const s of sigs){const e=predict(s.ty,s.fs);if(Ln('T:'+s.ty)>=15&&(!best||e>best.e))best={...s,e}}
+        if(best&&best.e>=0.1){const sd=best.sd,rp=Math.min(6,Math.max(0.5,best.e*5))*X.lvl,cap=5,stop=2*P.atr[i],eq=a.cash,risk=eq*rp/100*(brake()?0.5:1);
+          const notional=Math.min(risk/(stop/x.c+2*FFEE+2*SLIP),eq*cap*0.95),margin=notional/cap,lev=notional/eq;
+          if(margin>=1){const f=x.c*(1+sd*SLIP);a.pos={kind:'lev',side:sd,qty:notional/f,margin,entry:f,mid:x.c,sl:x.c-sd*stop,R:stop,best:x.c,be:false,trail:false,fund:0,cap0:a.cash};a.cash-=margin+notional*FFEE;
+            const why=TYPES[best.ty];feed(end,'i',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(x.c)} (${why}) · gelernter Vorteil ${best.e>=0?'+':''}${best.e.toFixed(2).replace('.',',')}R → Hebel ${lev.toFixed(1)}x`);X.ev.push({t:end,c,k:'A',io:'in',side:sd,px:x.c,why,lev,edge:best.e})}}}}
+    else if(!a.pos&&i>=210&&!((X.cool[c]||0)>end)){
       const up=x.c>P.e200[i]&&P.e50[i]>P.e200[i],dn=x.c<P.e200[i]&&P.e50[i]<P.e200[i];let sd=0;
       if(up&&Math.min(P.h[i].l,P.h[i-1].l,P.h[i-2].l)<=P.e50[i]*1.002&&x.c>P.e21[i]&&x.c>x.o&&P.r14[i]<70)sd=1;
       else if(dn&&Math.max(P.h[i].h,P.h[i-1].h,P.h[i-2].h)>=P.e50[i]*0.998&&x.c<P.e21[i]&&x.c<x.o&&P.r14[i]>30)sd=-1;
@@ -248,9 +298,13 @@ function step(){
     // Tagesschluss
     if(end%DAY===0){const j=P.iD.get(end-DAY);if(j==null)continue;if(c==='BTC')lastD=j;const d=P.d[j];
       const b=X.acc.B[c];
+      if(X.learn){const sb=X.L.bS[c];if(sb&&d.c>P.s5[j]){const r=d.c/sb-1-2*(FEE+SLIP);X.L.b.n++;X.L.b.s+=r;X.L.bS[c]=null}else if(!sb&&d.c>P.s200[j]&&P.r2[j]<10)X.L.bS[c]=d.c}
+      const bOK=!X.learn||(X.L.b.n>=8&&X.L.b.s>0);
       if(b.pos){if(d.c>P.s5[j])close('B',c,d.c,'Erholung',end)}
-      else if(d.c>P.s200[j]&&P.r2[j]<10){const size=b.cash*(brake()?0.5:1);if(size>=1){b.pos={kind:'spot',side:1,qty:size*(1-FEE)/(d.c*(1+SLIP)),mid:d.c,cap0:b.cash};b.cash-=size;feed(end,'i',`B · ${c} KAUF @ ${px(d.c)} (RSI(2) ${P.r2[j].toFixed(0)})`);X.ev.push({t:end,c,k:'B',io:'in',side:1,px:d.c})}}
-      const bj=X.P.BTC.iD.get(end-DAY),bull=bj!=null&&regimeAt(bj),cc=X.acc.C[c];let tg=bull?P.tsm[j]:0;if(brake())tg*=0.5;
+      else if(bOK&&d.c>P.s200[j]&&P.r2[j]<10){const size=b.cash*(brake()?0.5:1);if(size>=1){b.pos={kind:'spot',side:1,qty:size*(1-FEE)/(d.c*(1+SLIP)),mid:d.c,cap0:b.cash};b.cash-=size;feed(end,'i',`B · ${c} KAUF @ ${px(d.c)} (RSI(2) ${P.r2[j].toFixed(0)})`);X.ev.push({t:end,c,k:'B',io:'in',side:1,px:d.c})}}
+      const bj=X.P.BTC.iD.get(end-DAY),bull=bj!=null&&regimeAt(bj),cc=X.acc.C[c];let tg=bull?P.tsm[j]:0;
+      if(X.learn){if(j>0){const prevTg=X.L['cT'+c]||0;X.L.cS.push([end,prevTg*(d.c/P.d[j-1].c-1)/6]);X.L['cT'+c]=tg}while(X.L.cS.length&&X.L.cS[0][0]<end-180*DAY)X.L.cS.shift();const cs=X.L.cS.reduce((s,v)=>s+v[1],0);if(end-X.L.t0<60*DAY||cs<=0)tg=0}
+      if(brake())tg*=0.5;
       const eq=aEq(cc,d.c),cur=cc.pos?cc.pos.qty*d.c/eq:0;
       if(Math.abs(tg-cur)>=0.05){if(tg===0)close('C',c,d.c,bull?'Momentum weg':'Bärenmodus – raus',end);
         else{const fee=Math.abs(tg-cur)*eq*(FEE+SLIP),cap0=cc.pos?cc.pos.cap0:eq;cc.cash=eq-tg*eq-fee;if(!cc.pos||tg>cur)X.ev.push({t:end,c,k:'C',io:'in',side:1,px:d.c,share:tg});cc.pos={kind:'spot',side:1,qty:tg*eq/d.c,mid:d.c,cap0}}}}}
@@ -276,6 +330,11 @@ function render(){if(!X)return;const n=X.tl.length,k=Math.min(X.k,n),t=X.tl[Math
   $('feed').innerHTML=FEED.slice(0,40).map((f,i)=>`<div class="${f.cls}${i===0?' new':''}">${dfmt(f.t)} ${esc(f.msg)}</div>`).join('');$('trInfo').textContent=tr.length?tr.length+' abgeschlossen':'';
   const rs={};for(const x of tr){const key=x.k+' · '+x.why,o=rs[key]||(rs[key]={n:0,s:0});o.n++;o.s+=x.pnl}
   $('rsBody').innerHTML=Object.entries(rs).sort((p,q)=>q[1].s-p[1].s).map(([kk,o])=>`<tr><td>${esc(kk)}</td><td class="n">${o.n}</td><td class="n ${o.s>=0?'up':'down'}">${o.s>=0?'+':''}${eur(o.s,2)}</td></tr>`).join('');$('rsEmpty').style.display=tr.length?'none':'';
+  if(X.learn){$('learnCard').style.display='';const T=learnedTable();
+    $('lnBody').innerHTML=T.rows.map(r=>`<tr><td>${r.l}</td><td class="n">${r.n}</td><td class="n ${r.m>=0?'up':'down'}">${r.n?(r.m>=0?'+':'')+r.m.toFixed(2).replace('.',',')+'R':'–'}</td></tr>`).join('')+`<tr><td>B · RSI-2-Dips</td><td class="n">${T.b.n}</td><td class="n ${T.b.s>=0?'up':'down'}">${T.b.n?pct(T.b.s/T.b.n*100,2):'–'}</td></tr>`;
+    const fmt=a=>a.map(f=>`${esc(f.l)} <b class="${f.d>=0?'up':'down'}">${f.d>=0?'+':''}${f.d.toFixed(2).replace('.',',')}R</b> <span class="mute">(${f.n}×)</span>`).join('<br>')||'noch zu wenig Daten';
+    $('lnGood').innerHTML=fmt(T.f.filter(f=>f.d>0.02).slice(0,5));$('lnBad').innerHTML=fmt(T.f.filter(f=>f.d<-0.02).slice(-5).reverse());
+    const n=Ln('ALL');$('lnInfo').textContent=n?`${n} Schatten-Trades ausgewertet`:'lernt noch…'}else $('learnCard').style.display='none';
   draw();drawPC()}
 function draw(){const o=canv($('eqc'));if(!o||!X)return;const {g,W:Wd,H}=o,n=X.tl.length,len=X.eq.length;if(len<2)return;const R=56;
   const step=Math.max(1,Math.floor(len/700));let lo=X.cap,hi=X.cap;for(let i=0;i<len;i+=step){lo=Math.min(lo,X.eq[i],X.bh[i]);hi=Math.max(hi,X.eq[i],X.bh[i])}
@@ -315,7 +374,7 @@ $('coinTabs').addEventListener('click',e=>{const b=e.target.closest('[data-c]');
 $('sysTabs').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b){pcSys=b.dataset.s;tabs();drawPC();$('pcTip').textContent=''}});
 $('pc').addEventListener('click',ev=>{const r=$('pc').getBoundingClientRect(),mx=ev.clientX-r.left,my=ev.clientY-r.top;let best=null,bd=1e9;for(const h of pcHits){const d=(h.X-mx)**2+(h.Y-my)**2;if(d<bd){bd=d;best=h}}
   if(!best||bd>900){$('pcTip').textContent='';return}const e=best.e;
-  $('pcTip').innerHTML=`<b>${dfmt(e.t)}</b> · System ${e.k} · ${e.io==='in'?(e.side>0?'Long-Kauf':'Short-Einstieg')+(e.why?' ('+esc(e.why)+')':'')+(e.lev!=null?` · Sicherheit ${e.sc}/3 · Hebel ${e.lev.toFixed(1)}x`:'')+(e.share!=null?' (Anteil '+Math.round(e.share*100)+' %)':''):'Ausstieg: '+esc(e.why)} @ ${px(e.px)}${e.io==='out'?` · <span class="${e.pnl>=0?'up':'down'}">${e.pnl>=0?'+':''}${eur(e.pnl,2)}</span>`:''}`});
+  $('pcTip').innerHTML=`<b>${dfmt(e.t)}</b> · System ${e.k} · ${e.io==='in'?(e.side>0?'Long-Kauf':'Short-Einstieg')+(e.why?' ('+esc(e.why)+')':'')+(e.edge!=null?` · gelernter Vorteil ${e.edge.toFixed(2).replace('.',',')}R · Hebel ${e.lev.toFixed(1)}x`:e.lev!=null?` · Sicherheit ${e.sc}/3 · Hebel ${e.lev.toFixed(1)}x`:'')+(e.share!=null?' (Anteil '+Math.round(e.share*100)+' %)':''):'Ausstieg: '+esc(e.why)} @ ${px(e.px)}${e.io==='out'?` · <span class="${e.pnl>=0?'up':'down'}">${e.pnl>=0?'+':''}${eur(e.pnl,2)}</span>`:''}`});
 tabs();
 
 /* ---------- Ablauf ---------- */
@@ -334,7 +393,7 @@ $('startBtn').onclick=async()=>{const t=$('startBtn').textContent;
   if(t==='Weiter'&&X){running=true;last=0;setBtn('Pause');requestAnimationFrame(loop);return}
   if(await prepareRun()){running=true;last=0;acc=0;setBtn('Pause');requestAnimationFrame(loop)}};
 $('endBtn').onclick=async()=>{const t=$('startBtn').textContent;if(!X||t==='Start'||t==='Nochmal'){if(!(await prepareRun()))return}running=false;while(X.k<X.tl.length)step();setBtn('Nochmal');render()};
-for(const id of ['cPer','cCap','cRisk','cFilt','cBrk','cAuto','cLvl'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
+for(const id of ['cPer','cCap','cRisk','cFilt','cBrk','cAuto','cLvl','cMode','cWarm'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
 $('spd').innerHTML=[1,2,3,4,5].map(v=>`<button type="button" data-v="${v}">${v}×</button>`).join('');
 const mark=()=>{for(const b of $('spd').children)b.className=+b.dataset.v===speed?'on':''};
 $('spd').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){speed=+b.dataset.v;mark();render()}});
