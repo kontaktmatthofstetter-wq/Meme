@@ -127,6 +127,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <label>Wende-Ausbruch (Long)<select id="cBrk"><option value="1" selected>An – fängt verpasste Rallyes</option><option value="0">Aus</option></select></label>
     <label>Modus<select id="cMode"><option value="learn" selected>Selbstlernend – startet ohne Wissen</option><option value="fix">Feste Regeln (mit Vorwissen)</option></select></label>
     <label>Vorlauf (Selbstlernend)<select id="cWarm"><option value="1" selected>Lernt vorher aus dem Jahr davor</option><option value="0">Startet bei null</option></select></label>
+    <label>Nachkaufen<select id="cPyr"><option value="1" selected>An – bei +1R und +2R</option><option value="0">Aus</option></select></label>
     <label>Risikostufe<select id="cLvl"><option value="1">Normal (×1)</option><option value="1.5">Erhöht (×1,5)</option><option value="2">Aggressiv (×2)</option><option value="3">Hoch (×3)</option><option value="4" selected>Maximum (×4)</option></select></label>
     <label>Hebel-Automatik<select id="cAuto"><option value="1" selected>An – Hebel nach Sicherheit</option><option value="0">Aus – festes Risiko</option></select></label>
   </div>
@@ -260,7 +261,7 @@ function prepare(D,days,capEur,risk){
           if(sb&&d.c>Q.s5[j]){X.L.b.n++;X.L.b.s+=d.c/sb-1-2*(FEE+SLIP);X.L.bS[c]=null}else if(!sb&&d.c>Q.s200[j]&&Q.r2[j]<10)X.L.bS[c]=d.c;
           const tg0=bull?Q.tsm[j]:0,prev=X.L['cT'+c]||0;X.L.cS.push([end,prev*(d.c/Q.d[j-1].c-1)/6]);X.L['cT'+c]=tg0;while(X.L.cS.length&&X.L.cS[0][0]<end-180*DAY)X.L.cS.shift()}}}}
   const Lpre=X.L;
-  return{P,tl,k:0,acc,cap,risk,ev:[],learn:$('cMode').value==='learn',L:Lpre,filt:$('cFilt').value==='1',brk:$('cBrk').value==='1',auto:$('cAuto').value==='1',lvl:+$('cLvl').value,skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
+  return{P,tl,k:0,acc,cap,risk,ev:[],learn:$('cMode').value==='learn',L:Lpre,filt:$('cFilt').value==='1',brk:$('cBrk').value==='1',auto:$('cAuto').value==='1',pyr:$('cPyr').value==='1',lvl:+$('cLvl').value,skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
 function posVal(p,pr){if(p.kind==='spot')return p.qty*pr*(1-SLIP)*(1-FEE);const ex=pr*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
 function aEq(a,pr){return a.cash+(a.pos?posVal(a.pos,pr):0)}
 function total(){let s=0;for(const k in W)for(const c of COINS)s+=aEq(X.acc[k][c],X.price[c]||0);return s}
@@ -276,7 +277,11 @@ function step(){
     const a=X.acc.A[c],p=a.pos;
     if(p){const sd=p.side;if(sd>0)p.fund+=p.qty*x.c*FUND*0.5;
       if(sd>0?x.l<=p.sl:x.h>=p.sl){close('A',c,sd>0?Math.min(x.o,p.sl):Math.max(x.o,p.sl),p.trail?'Trailing-Stop':'Stop-Loss',end)}
-      else{p.best=sd>0?Math.max(p.best,x.h):Math.min(p.best,x.l);if(sd*(p.best-p.mid)>=p.R)p.be=true;const tr=p.best-sd*3*P.atr[i];if(p.be&&sd*(tr-p.sl)>0){p.sl=tr;p.trail=true}}}
+      else{p.best=sd>0?Math.max(p.best,x.h):Math.min(p.best,x.l);if(sd*(p.best-p.mid)>=p.R)p.be=true;const tr=p.best-sd*3*P.atr[i];if(p.be&&sd*(tr-p.sl)>0){p.sl=tr;p.trail=true}
+        // Nachkaufen: läuft der Trade +1R bzw. +2R, halbe Startgröße dazu (gemeinsamer Stop)
+        const ad=p.adds||0;if(X.pyr&&ad<2&&sd*(x.c-p.mid)>=(ad+1)*p.R){const q0=p.q0||p.qty,eqA=aEq(a,x.c),maxN=eqA*5*0.95,addN=Math.min(0.5*q0*x.c,maxN-p.qty*x.c),mg=addN/5;
+          if(addN>0&&mg>=1&&a.cash>=mg+addN*FFEE){const f=x.c*(1+sd*SLIP),aq=addN/f;p.q0=q0;p.entry=(p.entry*p.qty+f*aq)/(p.qty+aq);p.qty+=aq;p.margin+=mg;a.cash-=mg+addN*FFEE;p.adds=ad+1;
+            feed(end,'i',`A · ${c} Nachkauf ${ad+1} @ ${px(x.c)} (+${ad+1}R im Plus)`);X.ev.push({t:end,c,k:'A',io:'in',side:sd,px:x.c,why:'Nachkauf '+(ad+1)})}else p.adds=2}}}
     const bjA=X.P.BTC.iD.get(Math.floor(end/DAY)*DAY-DAY),bullA=bjA!=null&&regimeAt(bjA);
     if(X.learn){const sigs=shadowStep(c,P,i,x,bullA,end);
       if(!a.pos&&!((X.cool[c]||0)>end)&&sigs.length){let best=null;for(const s of sigs){const e=predict(s.ty,s.fs);if(Ln('T:'+s.ty)>=15&&(!best||e>best.e))best={...s,e}}
@@ -393,7 +398,7 @@ $('startBtn').onclick=async()=>{const t=$('startBtn').textContent;
   if(t==='Weiter'&&X){running=true;last=0;setBtn('Pause');requestAnimationFrame(loop);return}
   if(await prepareRun()){running=true;last=0;acc=0;setBtn('Pause');requestAnimationFrame(loop)}};
 $('endBtn').onclick=async()=>{const t=$('startBtn').textContent;if(!X||t==='Start'||t==='Nochmal'){if(!(await prepareRun()))return}running=false;while(X.k<X.tl.length)step();setBtn('Nochmal');render()};
-for(const id of ['cPer','cCap','cRisk','cFilt','cBrk','cAuto','cLvl','cMode','cWarm'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
+for(const id of ['cPer','cCap','cRisk','cFilt','cBrk','cAuto','cLvl','cMode','cWarm','cPyr'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
 $('spd').innerHTML=[1,2,3,4,5].map(v=>`<button type="button" data-v="${v}">${v}×</button>`).join('');
 const mark=()=>{for(const b of $('spd').children)b.className=+b.dataset.v===speed?'on':''};
 $('spd').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){speed=+b.dataset.v;mark();render()}});

@@ -107,7 +107,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
 <div class="wrap">
 <header>
   <div class="logo">M</div>
-  <div><h1>Meta-Bot Max</h1><div class="sub">Einstellungen wie der 9.294-€-Lauf: feste Regeln · Stop-Filter · Wende-Ausbruch · Hebel-Automatik · Risiko Maximum ×4 · 6 Coins · Marktphasen-Schalter · Binance live · Paper · <a href="meta-replay.html">Zeitreise ▶</a></div></div>
+  <div><h1>Meta-Bot Max</h1><div class="sub">Einstellungen wie der 9.294-€-Lauf: feste Regeln · Stop-Filter · Wende-Ausbruch · Hebel-Automatik · Nachkaufen · Risiko Maximum ×4 · 6 Coins · Marktphasen-Schalter · Binance live · Paper · <a href="meta-replay.html">Zeitreise ▶</a></div></div>
   <div class="sp"></div>
   <span class="pill"><i class="dot" id="wsDot"></i><span id="wsTxt">Getrennt</span></span>
   <button class="btn" id="wakeBtn" type="button">Bildschirm wach: aus</button>
@@ -165,6 +165,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
   <div class="params" style="font-size:13px">
     <p><b>A · Trendfolge Long/Short (40 %)</b> – 4-Stunden-Kerzen. Nur in Trendrichtung (EMA 50 gegen EMA 200). Einstieg, wenn der Kurs an die EMA 50 zurücksetzt und stark über (Long) bzw. unter (Short) der EMA 21 schließt. Zusätzlich <b>Wende-Ausbruch (nur Long)</b>: springt der Kurs mit mindestens 1,2-fachem Volumen über das Hoch der letzten 30 Kerzen und liegt die EMA 21 über der EMA 50, steigt er früh in neue Rallyes ein. Zwei Filter aus der Stop-Analyse (für Rücksetzer-Einstiege): kein Einstieg, wenn der ADX ≥ 30 ist (Trend überhitzt), oder wenn die Bollinger-Bandbreite unter 40 % ihrer letzten 120 Kerzen liegt (Markt zu eng). Stop 2 ATR, ab +1R Trailing-Stop 3 ATR hinter dem Hoch, kein festes Ziel. 3 % Risiko pro Trade, max. 2x Hebel.</p>
     <p><b>Hebel-Automatik:</b> Jeder Trendfolge-Trade bekommt 0–3 Sicherheitspunkte – je einen für hohe Bollinger-Bandbreite (über 62 % der letzten 120 Kerzen), starkes Volumen (über 1,96× Schnitt) und ruhige Schwankung (ATR unter 1,73 %). Danach riskiert er 1 / 2,5 / 4 / 6 % des Kontos mal Risikostufe (Standard „Maximum“ ×4: also 4 / 10 / 16 / 24 % – höchstes Gewinnpotenzial im Backtest, aber Rückgänge bis ~45 %), der Hebel ergibt sich daraus (max. 5x). In den Tests liefen Trades mit 3 Punkten im Schnitt +1,5 bis +1,8R, Trades mit 0 Punkten etwa ±0.</p>
+    <p><b>Nachkaufen:</b> Läuft ein Trend-Trade +1R bzw. +2R ins Plus, kauft der Bot jeweils die halbe Startgröße dazu. Alle Teile haben denselben Trailing-Stop. So verdient er an den großen Trends deutlich mehr; im Test über 3 Jahre ein Vielfaches – bei etwas größeren Rückgängen.</p>
     <p><b>B · RSI-2 nach Connors (30 %)</b> – Tageskerzen. Kauft, wenn der Coin über seiner 200-Tage-Linie liegt und der RSI(2) unter 10 fällt (kurzer Panik-Dip im Aufwärtstrend). Verkauft, sobald der Kurs über dem 5-Tage-Schnitt schließt.</p>
     <p><b>C · Momentum mit Marktphasen-Schalter (30 %)</b> – Tageskerzen. Nur aktiv, wenn BTC über seiner 200-Tage-Linie liegt (Bullenmodus). Dann wird investiert, je nachdem wie viele von 5 Zeitfenstern (10–90 Tage) im Plus sind – 0 bis 100 %. Im Bärenmodus komplett raus.</p>
     <p><b>Notbremse:</b> Fällt das Gesamtkonto 15 % unter sein Hoch, halbiert der Bot alle neuen Positionen.</p>
@@ -180,7 +181,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
 const KEY='metamax.v1',COINS=['BTC','ETH','SOL','BNB','XRP','DOGE'];
 const FEE=0.001,FFEE=0.0005,SLIP=0.0002,FUND=0.0001;
 const SLV={A:{n:'A · Trendfolge L/S',c:'#5aa8ff',w:0.4},B:{n:'B · RSI-2',c:'#f2c14e',w:0.3},C:{n:'C · Momentum + Schalter',c:'#a98bff',w:0.3}};
-const DEF={capital:1000,riskA:3,brake:15,autoLev:true,lvl:4,lvlV2:true,mode:'fix'};
+const DEF={capital:1000,riskA:3,brake:15,autoLev:true,lvl:4,lvlV2:true,pyr:true,mode:'fix'};
 const now=()=>Date.now()+(window.__t||0);
 function newAcc(cap,rate){const u=cap/rate,s={};for(const k in SLV){s[k]={};for(const c of COINS)s[k][c]={cash:u*SLV[k].w/COINS.length,pos:null}}return s}
 function fresh(st){st=st||{...DEF};return{settings:st,eurRate:0.92,acc:newAcc(st.capital,0.92),start:st.capital/0.92,peak:st.capital/0.92,closed:[],equity:[],done:{},logs:[],running:false,cool:{}}}
@@ -295,7 +296,10 @@ function process(c){
 function stepA(c,cs){
   const a=S.acc.A[c],cl=cs.map(x=>x.c),n=cl.length-1,e21=ema(cl,21),e50=ema(cl,50),e200=ema(cl,200),atr=atrA(cs)[n],r=rsiA(cl,14)[n],x=cs[n];
   if(a.pos){const p=a.pos,sd=p.side;if(p.kind==='lev'){p.fund+=sd>0?p.qty*x.c*FUND*0.5:0;
-      if(sd*(p.best-p.mid)>=p.R)p.be=true;const t=p.best-sd*3*atr;if(p.be&&sd*(t-p.sl)>0){p.sl=t;if(!p.trail)log('i',`A · ${c}: +1R – Trailing-Stop läuft (${px(t)})`);p.trail=true}}return}
+      if(sd*(p.best-p.mid)>=p.R)p.be=true;const t=p.best-sd*3*atr;if(p.be&&sd*(t-p.sl)>0){p.sl=t;if(!p.trail)log('i',`A · ${c}: +1R – Trailing-Stop läuft (${px(t)})`);p.trail=true}
+      const ad=p.adds||0;if(S.settings.pyr!==false&&ad<2&&sd*(x.c-p.mid)>=(ad+1)*p.R){const q0=p.q0||p.qty,eqA=eqOf(a,c),maxN=eqA*5*0.95,addN=Math.min(0.5*q0*x.c,maxN-p.qty*x.c),mg=addN/5;
+        if(addN>0&&mg>=1&&a.cash>=mg+addN*FFEE){const f=x.c*(1+sd*SLIP),aq=addN/f;p.q0=q0;p.entry=(p.entry*p.qty+f*aq)/(p.qty+aq);p.qty+=aq;p.margin+=mg;a.cash-=mg+addN*FFEE;p.adds=ad+1;
+          log('b',`A · ${c} Nachkauf ${ad+1} @ ${px(x.c)} · +${ad+1}R im Plus · ${eur(addN)} dazu, Stop bleibt gemeinsam`)}else p.adds=2}}return}
   if((S.cool[c]||0)>now())return;
   if(learnOn()){if(!ensureLearn())return;const P=LRN.P[c],i=P.i4.get(x.t);if(i==null)return;const bull=LRN.bullAt(x.t+4*3600e3);let best=null;
     for(const [ty,sd] of lSignals(P,i,x)){const fs=lFeats(P,i,x,sd,bull),e=lPredict(ty,fs);if(Ln('T:'+ty)>=15&&(!best||e>best.e))best={ty,sd,e}}
@@ -382,8 +386,8 @@ function drawBT(){const o=canv($('btc'));if(!o)return;const {g,W,H}=o,R=48;const
 new ResizeObserver(()=>{dirty=true}).observe(document.body);
 
 /* ---------- Bedienung ---------- */
-function renderSettings(){const s=S.settings;$('setForm').innerHTML=`<label>Startkapital (€)<input id="f_cap" type="number" inputmode="decimal" value="${esc(s.capital)}"></label><label>Modus<select id="f_mode"><option value="learn"${s.mode!=='fix'?' selected':''}>Selbstlernend (ohne Vorwissen)</option><option value="fix"${s.mode==='fix'?' selected':''}>Feste Regeln (mit Vorwissen)</option></select></label><label>Risikostufe<select id="f_lvl">${[[1,'Normal (×1)'],[1.5,'Erhöht (×1,5)'],[2,'Aggressiv (×2)'],[3,'Hoch (×3)'],[4,'Maximum (×4)']].map(([v,l])=>`<option value="${v}"${+s.lvl===v?' selected':''}>${l}</option>`).join('')}</select></label><label>Hebel-Automatik<select id="f_auto"><option value="1"${s.autoLev!==false?' selected':''}>An – Hebel nach Sicherheit</option><option value="0"${s.autoLev===false?' selected':''}>Aus – festes Risiko</option></select></label><label>Festes Risiko, wenn Automatik aus (%)<input id="f_risk" type="number" inputmode="decimal" step="0.5" value="${esc(s.riskA)}"></label><label>Notbremse ab Rückgang (%)<input id="f_brake" type="number" inputmode="decimal" value="${esc(s.brake)}"></label>`}
-$('saveBtn').onclick=()=>{const s=S.settings,v=id=>+$(id).value;if(v('f_cap')>0)s.capital=v('f_cap');if(v('f_risk')>0&&v('f_risk')<=5)s.riskA=v('f_risk');if(v('f_brake')>0)s.brake=v('f_brake');s.autoLev=$('f_auto').value==='1';s.lvl=+$('f_lvl').value;s.mode=$('f_mode').value;LRN=null;
+function renderSettings(){const s=S.settings;$('setForm').innerHTML=`<label>Startkapital (€)<input id="f_cap" type="number" inputmode="decimal" value="${esc(s.capital)}"></label><label>Modus<select id="f_mode"><option value="learn"${s.mode!=='fix'?' selected':''}>Selbstlernend (ohne Vorwissen)</option><option value="fix"${s.mode==='fix'?' selected':''}>Feste Regeln (mit Vorwissen)</option></select></label><label>Nachkaufen<select id="f_pyr"><option value="1"${s.pyr!==false?' selected':''}>An – bei +1R und +2R</option><option value="0"${s.pyr===false?' selected':''}>Aus</option></select></label><label>Risikostufe<select id="f_lvl">${[[1,'Normal (×1)'],[1.5,'Erhöht (×1,5)'],[2,'Aggressiv (×2)'],[3,'Hoch (×3)'],[4,'Maximum (×4)']].map(([v,l])=>`<option value="${v}"${+s.lvl===v?' selected':''}>${l}</option>`).join('')}</select></label><label>Hebel-Automatik<select id="f_auto"><option value="1"${s.autoLev!==false?' selected':''}>An – Hebel nach Sicherheit</option><option value="0"${s.autoLev===false?' selected':''}>Aus – festes Risiko</option></select></label><label>Festes Risiko, wenn Automatik aus (%)<input id="f_risk" type="number" inputmode="decimal" step="0.5" value="${esc(s.riskA)}"></label><label>Notbremse ab Rückgang (%)<input id="f_brake" type="number" inputmode="decimal" value="${esc(s.brake)}"></label>`}
+$('saveBtn').onclick=()=>{const s=S.settings,v=id=>+$(id).value;if(v('f_cap')>0)s.capital=v('f_cap');if(v('f_risk')>0&&v('f_risk')<=5)s.riskA=v('f_risk');if(v('f_brake')>0)s.brake=v('f_brake');s.autoLev=$('f_auto').value==='1';s.lvl=+$('f_lvl').value;s.pyr=$('f_pyr').value==='1';s.mode=$('f_mode').value;LRN=null;
   if(!S.closed.length&&!COINS.some(c=>Object.keys(SLV).some(k=>S.acc[k][c].pos))){const r=S.eurRate;S.acc=newAcc(s.capital,r);S.start=S.peak=s.capital/r;S.equity=[]}log('i','Einstellungen gespeichert');save()};
 $('resetBtn').onclick=()=>$('modal').classList.add('on');$('mNo').onclick=()=>$('modal').classList.remove('on');
 $('mYes').onclick=()=>{const st=S.settings,r=S.eurRate,run=S.running;S=fresh(st);S.eurRate=r;S.acc=newAcc(st.capital,r);S.start=S.peak=st.capital/r;S.running=run;$('modal').classList.remove('on');save();dirty=true};
