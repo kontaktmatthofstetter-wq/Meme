@@ -125,6 +125,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <label>Festes Risiko pro Trend-Trade (%)<input id="cRisk" type="number" inputmode="decimal" step="0.5" value="3"></label>
     <label>Stop-Filter (ADX + Bandbreite)<select id="cFilt"><option value="1" selected>An – neue Version</option><option value="0">Aus – alte Version</option></select></label>
     <label>Wende-Ausbruch (Long)<select id="cBrk"><option value="1" selected>An – fängt verpasste Rallyes</option><option value="0">Aus</option></select></label>
+    <label>Risikostufe<select id="cLvl"><option value="1">Normal (×1)</option><option value="1.5" selected>Erhöht (×1,5) – empfohlen</option><option value="2">Aggressiv (×2)</option></select></label>
     <label>Hebel-Automatik<select id="cAuto"><option value="1" selected>An – Hebel nach Sicherheit</option><option value="0">Aus – festes Risiko</option></select></label>
   </div>
   <div class="row" style="align-items:center">
@@ -170,7 +171,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <div class="scroll"><table><thead><tr><th>System · Grund</th><th class="n">Trades</th><th class="n">Summe</th></tr></thead><tbody id="rsBody"></tbody></table></div>
     <div class="empty" id="rsEmpty">Noch nichts.</div></div>
 </div>
-<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Hebel-Automatik: Sicherheit 0–3 Punkte (Bandbreite über 62 %, Volumen über 1,96×, Schwankung unter 1,73 %) → Risiko 1 / 2,5 / 4 / 6 % pro Trade, max. 5x Hebel. Trendfolge mit Wende-Ausbruch (Long, wenn der Kurs mit Volumen über das 30-Kerzen-Hoch springt und EMA 21 über EMA 50 liegt) und Stop-Filter: kein Einstieg bei ADX ≥ 30 oder Bollinger-Bandbreite unter 40 % der letzten 120 Kerzen. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
+<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Hebel-Automatik: Sicherheit 0–3 Punkte (Bandbreite über 62 %, Volumen über 1,96×, Schwankung unter 1,73 %) → Risiko 1 / 2,5 / 4 / 6 % pro Trade, mal Risikostufe (Normal ×1, Erhöht ×1,5, Aggressiv ×2), max. 5x Hebel. Trendfolge mit Wende-Ausbruch (Long, wenn der Kurs mit Volumen über das 30-Kerzen-Hoch springt und EMA 21 über EMA 50 liegt) und Stop-Filter: kein Einstieg bei ADX ≥ 30 oder Bollinger-Bandbreite unter 40 % der letzten 120 Kerzen. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
 <p class="note"><a href="meta.html">← Live-Meta-Bot</a> · <a href="backtest.html">Backtest Arena</a></p>
 </div>
 
@@ -216,7 +217,7 @@ function prepare(D,days,capEur,risk){
   const tl=P.BTC.h.map(x=>x.t).filter(t=>t>=start);
   const acc={};for(const k in W){acc[k]={};for(const c of COINS)acc[k][c]={cash:cap*W[k]/6,pos:null}}
   const bh0={};for(const c of COINS){const i=P[c].i4.get(tl[0]);bh0[c]=P[c].h[i??0].c}
-  return{P,tl,k:0,acc,cap,risk,ev:[],filt:$('cFilt').value==='1',brk:$('cBrk').value==='1',auto:$('cAuto').value==='1',skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
+  return{P,tl,k:0,acc,cap,risk,ev:[],filt:$('cFilt').value==='1',brk:$('cBrk').value==='1',auto:$('cAuto').value==='1',lvl:+$('cLvl').value,skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
 function posVal(p,pr){if(p.kind==='spot')return p.qty*pr*(1-SLIP)*(1-FEE);const ex=pr*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
 function aEq(a,pr){return a.cash+(a.pos?posVal(a.pos,pr):0)}
 function total(){let s=0;for(const k in W)for(const c of COINS)s+=aEq(X.acc[k][c],X.price[c]||0);return s}
@@ -240,7 +241,7 @@ function step(){
       if(sd&&X.filt&&(P.adx[i]>=30||P.bwp[i]<0.4)){X.skipped++;sd=0}
       let why='Rücksetzer';
       if(!sd&&X.brk&&x.c>P.hi30[i]&&P.e21[i]>P.e50[i]&&x.v>1.2*P.av20[i]){sd=1;why='Wende-Ausbruch'}
-      if(sd){const sc=(P.bwp[i]>0.62?1:0)+(x.v>1.96*P.av20[i]?1:0)+(P.atr[i]/x.c*100<1.73?1:0),rp=X.auto?[1,2.5,4,6][sc]:X.risk,cap=X.auto?5:2;
+      if(sd){const sc=(P.bwp[i]>0.62?1:0)+(x.v>1.96*P.av20[i]?1:0)+(P.atr[i]/x.c*100<1.73?1:0),rp=(X.auto?[1,2.5,4,6][sc]:X.risk)*X.lvl,cap=X.auto?5:2;
         const stop=2*P.atr[i],eq=a.cash,risk=eq*rp/100*(brake()?0.5:1);const notional=Math.min(risk/(stop/x.c+2*FFEE+2*SLIP),eq*cap*0.95),margin=notional/cap,lev=notional/eq;
         if(margin>=1){const f=x.c*(1+sd*SLIP);a.pos={kind:'lev',side:sd,qty:notional/f,margin,entry:f,mid:x.c,sl:x.c-sd*stop,R:stop,best:x.c,be:false,trail:false,fund:0,cap0:a.cash};a.cash-=margin+notional*FFEE;
           feed(end,'i',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(x.c)} (${why})${X.auto?` · Sicherheit ${sc}/3 → Hebel ${lev.toFixed(1)}x`:''}`);X.ev.push({t:end,c,k:'A',io:'in',side:sd,px:x.c,why,sc,lev})}}}
@@ -333,7 +334,7 @@ $('startBtn').onclick=async()=>{const t=$('startBtn').textContent;
   if(t==='Weiter'&&X){running=true;last=0;setBtn('Pause');requestAnimationFrame(loop);return}
   if(await prepareRun()){running=true;last=0;acc=0;setBtn('Pause');requestAnimationFrame(loop)}};
 $('endBtn').onclick=async()=>{const t=$('startBtn').textContent;if(!X||t==='Start'||t==='Nochmal'){if(!(await prepareRun()))return}running=false;while(X.k<X.tl.length)step();setBtn('Nochmal');render()};
-for(const id of ['cPer','cCap','cRisk','cFilt','cBrk','cAuto'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
+for(const id of ['cPer','cCap','cRisk','cFilt','cBrk','cAuto','cLvl'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
 $('spd').innerHTML=[1,2,3,4,5].map(v=>`<button type="button" data-v="${v}">${v}×</button>`).join('');
 const mark=()=>{for(const b of $('spd').children)b.className=+b.dataset.v===speed?'on':''};
 $('spd').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){speed=+b.dataset.v;mark();render()}});
