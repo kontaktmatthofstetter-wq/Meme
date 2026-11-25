@@ -122,6 +122,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <label>Zeitraum<select id="cPer"><option value="365">1 Jahr</option><option value="730" selected>2 Jahre</option><option value="1095">3 Jahre</option></select></label>
     <label>Startkapital (€)<input id="cCap" type="number" inputmode="decimal" value="1000"></label>
     <label>Risiko pro Trend-Trade (%)<input id="cRisk" type="number" inputmode="decimal" step="0.5" value="3"></label>
+    <label>Stop-Filter (ADX + Bandbreite)<select id="cFilt"><option value="1" selected>An – neue Version</option><option value="0">Aus – alte Version</option></select></label>
   </div>
   <div class="row" style="align-items:center">
     <button class="btn go" id="startBtn" type="button">Start</button>
@@ -149,6 +150,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
   <div class="efig"><canvas id="eqc"></canvas></div>
   <div class="legend"><span><i style="background:#3ee08f"></i>Meta-Bot</span><span><i style="background:#e8f3ec66"></i>Einfach halten (6 Coins)</span><span>Rote Fläche = Bärenmodus (BTC unter 200-Tage-Linie)</span></div>
   <div class="kpi" style="margin-top:10px"><div>Trades<b id="kN">–</b></div><div>Trefferquote<b id="kW">–</b></div><div>Max. Rückgang<b id="kDD">–</b></div></div>
+  <div class="kpi"><div>Stops Trendfolge<b id="kStop">–</b></div><div>Vom Filter verworfen<b id="kSkip">–</b></div><div></div></div>
 </section>
 
 <div class="grid">
@@ -157,7 +159,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <div class="scroll"><table><thead><tr><th>System · Grund</th><th class="n">Trades</th><th class="n">Summe</th></tr></thead><tbody id="rsBody"></tbody></table></div>
     <div class="empty" id="rsEmpty">Noch nichts.</div></div>
 </div>
-<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
+<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Trendfolge mit Stop-Filter: kein Einstieg bei ADX ≥ 30 oder Bollinger-Bandbreite unter 40 % der letzten 120 Kerzen. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
 <p class="note"><a href="meta.html">← Live-Meta-Bot</a> · <a href="backtest.html">Backtest Arena</a></p>
 </div>
 
@@ -187,6 +189,10 @@ function ema(v,n){const k=2/(n+1),o=new Float64Array(v.length);o[0]=v[0];for(let
 function rma(v,n){const o=new Float64Array(v.length);o[0]=v[0];for(let i=1;i<v.length;i++)o[i]=(o[i-1]*(n-1)+v[i])/n;return o}
 function smaA(v,n){const o=new Float64Array(v.length).fill(NaN);let s=0;for(let i=0;i<v.length;i++){s+=v[i];if(i>=n)s-=v[i-n];if(i>=n-1)o[i]=s/n}return o}
 function rsiA(c,n){const g=rma(c.map((x,i)=>i?Math.max(0,x-c[i-1]):0),n),l=rma(c.map((x,i)=>i?Math.max(0,c[i-1]-x):0),n);return Array.from(g,(x,i)=>l[i]===0?100:100-100/(1+x/l[i]))}
+function adxA(cs){const n=cs.length,pd=[0],md=[0],tr=[cs[0].h-cs[0].l];for(let i=1;i<n;i++){const u=cs[i].h-cs[i-1].h,d=cs[i-1].l-cs[i].l;pd.push(u>d&&u>0?u:0);md.push(d>u&&d>0?d:0);tr.push(Math.max(cs[i].h-cs[i].l,Math.abs(cs[i].h-cs[i-1].c),Math.abs(cs[i].l-cs[i-1].c)))}
+  const a=rma(tr,14),p=rma(pd,14),m=rma(md,14),dx=Array.from(p,(x,i)=>{const P=100*x/a[i],M=100*m[i]/a[i];return 100*Math.abs(P-M)/Math.max(P+M,1e-12)});return rma(dx,14)}
+function bwpA(cl){const n=cl.length,bw=new Float64Array(n).fill(NaN);let s=0,q=0;for(let i=0;i<n;i++){s+=cl[i];q+=cl[i]*cl[i];if(i>=20){s-=cl[i-20];q-=cl[i-20]*cl[i-20]}if(i>=19){const m=s/20;bw[i]=4*Math.sqrt(Math.max(0,q/20-m*m))/m}}
+  const o=new Float64Array(n).fill(0);for(let i=0;i<n;i++){if(isNaN(bw[i]))continue;let le=0,k=0;for(let j=Math.max(19,i-119);j<=i;j++){k++;if(bw[j]<=bw[i])le++}o[i]=le/k}return o}
 function atrA(cs){return rma(cs.map((x,i)=>i?Math.max(x.h-x.l,Math.abs(x.h-cs[i-1].c),Math.abs(x.l-cs[i-1].c)):x.h-x.l),14)}
 
 /* ---------- Simulation ---------- */
@@ -195,11 +201,11 @@ function prepare(D,days,capEur,risk){
   const start=Date.now()-days*DAY,cap=capEur/RATE,P={};
   for(const c of COINS){const h=D[c].h4,d=D[c].d1,cl=h.map(x=>x.c),dc=d.map(x=>x.c);
     const tsm=dc.map((x,i)=>{let w=0;for(const k of [10,20,30,60,90])if(i>=k&&x>dc[i-k])w++;return w/5});
-    P[c]={h,d,i4:new Map(h.map((x,i)=>[x.t,i])),iD:new Map(d.map((x,i)=>[x.t,i])),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:atrA(h),r14:rsiA(cl,14),r2:rsiA(dc,2),s200:smaA(dc,200),s5:smaA(dc,5),tsm}}
+    P[c]={h,d,i4:new Map(h.map((x,i)=>[x.t,i])),iD:new Map(d.map((x,i)=>[x.t,i])),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:atrA(h),r14:rsiA(cl,14),adx:adxA(h),bwp:bwpA(cl),r2:rsiA(dc,2),s200:smaA(dc,200),s5:smaA(dc,5),tsm}}
   const tl=P.BTC.h.map(x=>x.t).filter(t=>t>=start);
   const acc={};for(const k in W){acc[k]={};for(const c of COINS)acc[k][c]={cash:cap*W[k]/6,pos:null}}
   const bh0={};for(const c of COINS){const i=P[c].i4.get(tl[0]);bh0[c]=P[c].h[i??0].c}
-  return{P,tl,k:0,acc,cap,risk,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
+  return{P,tl,k:0,acc,cap,risk,filt:$('cFilt').value==='1',skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
 function posVal(p,pr){if(p.kind==='spot')return p.qty*pr*(1-SLIP)*(1-FEE);const ex=pr*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
 function aEq(a,pr){return a.cash+(a.pos?posVal(a.pos,pr):0)}
 function total(){let s=0;for(const k in W)for(const c of COINS)s+=aEq(X.acc[k][c],X.price[c]||0);return s}
@@ -220,6 +226,7 @@ function step(){
       const up=x.c>P.e200[i]&&P.e50[i]>P.e200[i],dn=x.c<P.e200[i]&&P.e50[i]<P.e200[i];let sd=0;
       if(up&&Math.min(P.h[i].l,P.h[i-1].l,P.h[i-2].l)<=P.e50[i]*1.002&&x.c>P.e21[i]&&x.c>x.o&&P.r14[i]<70)sd=1;
       else if(dn&&Math.max(P.h[i].h,P.h[i-1].h,P.h[i-2].h)>=P.e50[i]*0.998&&x.c<P.e21[i]&&x.c<x.o&&P.r14[i]>30)sd=-1;
+      if(sd&&X.filt&&(P.adx[i]>=30||P.bwp[i]<0.4)){X.skipped++;sd=0}
       if(sd){const stop=2*P.atr[i],eq=a.cash,risk=eq*X.risk/100*(brake()?0.5:1);const notional=Math.min(risk/(stop/x.c+2*FFEE+2*SLIP),eq*2*0.95),margin=notional/2;
         if(margin>=1){const f=x.c*(1+sd*SLIP);a.pos={kind:'lev',side:sd,qty:notional/f,margin,entry:f,mid:x.c,sl:x.c-sd*stop,R:stop,best:x.c,be:false,trail:false,fund:0,cap0:a.cash};a.cash-=margin+notional*FFEE;
           feed(end,'i',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(x.c)}`)}}}
@@ -250,7 +257,7 @@ function render(){if(!X)return;const n=X.tl.length,k=Math.min(X.k,n),t=X.tl[Math
   const bh=X.bh.length?X.bh[X.bh.length-1]:X.cap;$('bh').innerHTML=`<span class="${bh>=X.cap?'up':'down'}">${pct((bh/X.cap-1)*100)}</span>`;
   for(const s of ['A','B','C']){const e=sleeveEq(s),st=X.cap*W[s];$('s'+s).innerHTML=`<span class="${e>=st?'up':'down'}">${pct((e/st-1)*100)}</span>`}
   const rg=X.reg[X.reg.length-1];$('reg').style.display=X.reg.length?'':'none';$('reg').className='reg '+(rg?'bull':'bear');$('reg').textContent=rg?'Bullenmodus – alle 3 Systeme aktiv':'Bärenmodus – Momentum aus, Trendfolge shortet';
-  const tr=X.trades,w=tr.filter(x=>x.pnl>0).length;$('kN').textContent=tr.length;$('kW').textContent=tr.length?Math.round(w/tr.length*100)+' %':'–';$('kDD').textContent=X.mdd.toFixed(1).replace('.',',')+' %';
+  const tr=X.trades,w=tr.filter(x=>x.pnl>0).length;$('kN').textContent=tr.length;$('kW').textContent=tr.length?Math.round(w/tr.length*100)+' %':'–';$('kDD').textContent=X.mdd.toFixed(1).replace('.',',')+' %';$('kSkip').textContent=X.filt?X.skipped:'aus';$('kStop').textContent=tr.filter(x=>x.k==='A'&&x.pnl<=0).length;
   $('feed').innerHTML=FEED.slice(0,40).map((f,i)=>`<div class="${f.cls}${i===0?' new':''}">${dfmt(f.t)} ${esc(f.msg)}</div>`).join('');$('trInfo').textContent=tr.length?tr.length+' abgeschlossen':'';
   const rs={};for(const x of tr){const key=x.k+' · '+x.why,o=rs[key]||(rs[key]={n:0,s:0});o.n++;o.s+=x.pnl}
   $('rsBody').innerHTML=Object.entries(rs).sort((p,q)=>q[1].s-p[1].s).map(([kk,o])=>`<tr><td>${esc(kk)}</td><td class="n">${o.n}</td><td class="n ${o.s>=0?'up':'down'}">${o.s>=0?'+':''}${eur(o.s,2)}</td></tr>`).join('');$('rsEmpty').style.display=tr.length?'none':'';
@@ -283,7 +290,7 @@ $('startBtn').onclick=async()=>{const t=$('startBtn').textContent;
   if(t==='Weiter'&&X){running=true;last=0;setBtn('Pause');requestAnimationFrame(loop);return}
   if(await prepareRun()){running=true;last=0;acc=0;setBtn('Pause');requestAnimationFrame(loop)}};
 $('endBtn').onclick=async()=>{const t=$('startBtn').textContent;if(!X||t==='Start'||t==='Nochmal'){if(!(await prepareRun()))return}running=false;while(X.k<X.tl.length)step();setBtn('Nochmal');render()};
-for(const id of ['cPer','cCap','cRisk'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
+for(const id of ['cPer','cCap','cRisk','cFilt'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
 $('spd').innerHTML=[1,2,3,4,5].map(v=>`<button type="button" data-v="${v}">${v}×</button>`).join('');
 const mark=()=>{for(const b of $('spd').children)b.className=+b.dataset.v===speed?'on':''};
 $('spd').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){speed=+b.dataset.v;mark();render()}});
