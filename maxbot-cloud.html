@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Meta-Bot">
+<meta name="theme-color" content="#07100c">
+<title>Max-Bot Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#000;--card:#0b0b0b;--card2:#151515;--line:#1f1f1f;--ink:#f2f2f2;--mute:#8a8a8a;--up:#22c55e;--down:#ef4444;--warn:#f2c14e;--blue:#5aa8ff;--violet:#a98bff}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);overflow-x:clip}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:40px;height:40px;border-radius:11px;background:#fff;color:#07100c;display:grid;place-items:center;font-weight:800}
+h1{font-size:20px;margin:0;line-height:1.1}
+.sub{color:var(--mute);font-size:13px}
+.sp{flex:1}
+button,select,input{font:inherit;color:inherit}
+.btn{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card2);cursor:pointer;font-weight:600}
+.btn.go{background:var(--up);color:#06130c;border:0}
+.btn.stop{background:var(--down);color:#1a0505;border:0}
+.btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--up);outline-offset:2px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:99px;background:var(--card2);border:1px solid var(--line)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.dot.ok{background:var(--up);box-shadow:0 0 8px var(--up)}.dot.err{background:var(--down)}.dot.wait{background:var(--warn)}
+.hero{position:relative;margin-top:14px;padding:18px;border-radius:18px;background:radial-gradient(120% 90% at 30% 0%,#12382480,transparent 60%),var(--card);border:1px solid var(--line)}
+.eq{font-size:clamp(44px,10vw,78px);font-weight:800;letter-spacing:-.03em;line-height:1}
+.eq small{font-size:.45em;font-weight:600}
+.pnl{font-weight:600;margin-top:4px}
+.mult{position:absolute;right:18px;top:18px;padding:6px 12px;border-radius:10px;font-weight:800;background:var(--up);color:#06130c}
+.mult.neg{background:var(--down);color:#1a0505}
+.fig{position:relative;height:150px;margin-top:10px}.fig canvas{position:absolute;inset:0;width:100%;height:100%}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--mute)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:12px}
+@media(max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.card h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.card h2 span{font-size:12px;color:var(--mute);font-weight:400}
+.agent{display:grid;grid-template-columns:28px 92px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.agent:first-of-type{border-top:0}
+.ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:12px;color:#06130c}
+.agent .act{color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent .cnt{font-size:12px;color:var(--mute);text-align:right;white-space:nowrap}
+.log{font:12px/1.6 "JetBrains Mono",ui-monospace,monospace;max-height:260px;overflow:auto}
+.log div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log .k{color:var(--down)}.log .b{color:var(--up)}.log .s{color:var(--warn)}.log .i{color:var(--mute)}
+.bar{margin:8px 0;font-size:12px}
+.bar .t{display:flex;justify-content:space-between;color:var(--mute)}
+.bar .tr{height:5px;background:var(--card2);border-radius:3px;margin-top:3px}
+.bar .tr i{display:block;height:100%;background:var(--down);border-radius:3px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--mute);font-weight:500;text-align:left;padding:6px 4px;font-size:12px}
+td{padding:7px 4px;border-top:1px solid var(--line);white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+.up{color:var(--up)}.down{color:var(--down)}.mute{color:var(--mute)}
+a{color:var(--blue);text-decoration:none}
+.empty{color:var(--mute);font-size:13px;padding:8px 0}
+details.card summary{cursor:pointer;font-weight:600;min-height:28px}
+.set{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:12px}
+.set label{font-size:12px;color:var(--mute);display:grid;gap:4px}
+.set input,.set select{min-height:44px;font-size:16px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--card2)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.note{font-size:12px;color:var(--mute);margin-top:10px}
+.modal{position:fixed;inset:0;background:#000a;display:none;place-items:center;padding:20px;z-index:9}
+.modal.on{display:grid}
+.modal .card{max-width:380px}
+.kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}
+.kpi div{background:var(--card2);border-radius:10px;padding:8px;font-size:12px;color:var(--mute)}
+.kpi b{display:block;color:var(--ink);font-size:15px}
+.kpi b.up{color:var(--up)}.kpi b.down{color:var(--down)}
+.cdbar{height:3px;background:var(--card2);border-radius:2px;margin:-4px 0 10px;overflow:hidden}.cdbar i{display:block;height:100%;width:0;background:var(--up);transition:width .38s linear}
+.feed{height:230px;max-height:none}.feed .a{color:#4fd1c5}
+@media(prefers-reduced-motion:no-preference){.feed .new{animation:fin .35s ease-out}@keyframes fin{from{opacity:0;transform:translateY(-6px)}}}
+.kpi.pl{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:600px){.kpi.pl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ch{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px;margin-right:6px;vertical-align:1px;color:#06130c}
+.ch.solana{background:#b79cff}.ch.base{background:#5aa8ff}.ch.bsc{background:#f2c14e}
+.tog{min-height:36px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:var(--card2);cursor:pointer;font-weight:600;font-size:13px}
+.tog.on{background:var(--up);color:#06130c;border:0}
+@media(prefers-reduced-motion:no-preference){.dot.ok{animation:p 2s infinite}@keyframes p{50%{opacity:.5}}}
+</style>
+<style>
+.sl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+@media(max-width:760px){.sl{grid-template-columns:minmax(0,1fr)}}
+.sl .card h2{margin-bottom:4px}
+.sl .v{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
+.sl .tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;color:#06130c;margin-right:6px}
+.reg{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;font-weight:700;margin-top:10px}
+.reg.bull{background:#123a26;color:var(--up)}.reg.bear{background:#3a1616;color:var(--down)}
+.efig{position:relative;height:240px;margin-top:6px}.efig canvas{position:absolute;inset:0;width:100%;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--mute);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.params{font-size:12px;color:var(--mute);margin-top:6px;line-height:1.55}.params b{color:var(--ink);font-weight:600}
+#lnCard,#btCard,#setCard{display:none!important}
+.hero{background:#0b0b0b!important}.logo{background:#22c55e!important;color:#000!important}
+.mult{background:#22c55e!important;color:#000!important}.mult.neg{background:#ef4444!important}
+.reg.bull{background:#0f2a18!important}.reg.bear{background:#2a0f0f!important}
+.ctab{display:flex;gap:6px;flex-wrap:wrap}.ctab button{min-height:40px;min-width:52px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:#111;font-weight:700;cursor:pointer;color:var(--ink)}
+.ctab button.on{background:#22c55e;color:#000;border:0}
+.cfig{position:relative;height:380px;margin-top:8px}.cfig canvas{position:absolute;inset:0;width:100%;height:100%}
+@media(max-width:600px){.cfig{height:300px}}
+.ov{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}@media(max-width:600px){.ov{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ov div{background:#111;border-radius:12px;padding:10px;font-size:12px;color:var(--mute)}.ov b{display:block;color:var(--ink);font-size:17px;font-variant-numeric:tabular-nums}
+.lev{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:800;font-size:12px;background:#22c55e;color:#000}.lev.s{background:#ef4444}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="logo">M</div>
+  <div><h1>Max-Bot ☁️</h1><div class="sub">Einstellung für maximalen Gewinn · Risiko ×3 · bis 5 Nachkäufe · Hebel-Automatik · 6 Coins · Läuft in der Cloud rund um die Uhr · Paper · <a href="maxbot-zeitreise.html">Zeitreise ▶</a></div><div class="sub" id="cloudSt" style="color:#22c55e">Verbinde mit dem Cloud-Bot…</div></div>
+  <div class="sp"></div>
+  <span class="pill"><i class="dot" id="wsDot"></i><span id="wsTxt">Getrennt</span></span>
+  <button class="btn" id="wakeBtn" type="button">Bildschirm wach: aus</button>
+  <button class="btn go" id="runBtn" type="button">Start</button>
+</header>
+
+<section class="hero">
+  <div class="sub" id="eqSub">Gesamtkonto · Paper</div>
+  <div class="eq" id="eq">0<small>,00 €</small></div>
+  <div class="pnl" id="pnl">+0,00 € (0,0 %)</div>
+  <div class="mult" id="mult">1,00×</div>
+  <div id="reg" class="reg">Marktphase wird ermittelt…</div>
+  <div class="fig"><canvas id="chart"></canvas></div>
+  <div class="params" id="brakeTxt"></div>
+</section>
+
+<div class="card" style="margin-top:12px">
+  <h2><span id="chT" style="color:var(--ink);font-size:15px;font-weight:700">Chart</span> <span id="chS"></span></h2>
+  <div class="row" style="margin-top:0"><div class="ctab" id="cTabs"></div><div class="ctab" id="tTabs"></div></div>
+  <div class="cfig"><canvas id="cand"></canvas></div>
+  <div class="legend" style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--mute);margin-top:6px"><span style="color:#22c55e">▲ Long / Kauf</span><span style="color:#ef4444">▼ Short</span><span style="color:#facc15">◆ Nachkauf</span><span>● Ausstieg (grün = Gewinn, rot = Verlust)</span><span>- - Einstieg / Stop</span></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <h2>Übersicht: Wo ist der Bot drin? <span id="ovInfo"></span></h2>
+  <div class="ov" id="ovKpi"></div>
+  <div class="scroll"><table><thead><tr><th>Coin</th><th>System</th><th>Richtung</th><th class="n">Hebel</th><th class="n">Eigenes Geld</th><th class="n">Positionsgröße</th><th class="n">Einstieg</th><th class="n">Stop</th><th class="n">Ergebnis</th></tr></thead><tbody id="ovBody"></tbody></table></div>
+  <div class="empty" id="ovEmpty">Gerade keine Position offen – der Bot wartet auf das nächste Signal.</div>
+  <p class="note">Automatik: Jeder Einsatz wird in Prozent vom aktuellen Konto berechnet. Wächst das Konto, werden die Positionen automatisch größer (Zinseszins) – schrumpft es, kleiner.</p>
+</div>
+
+<div class="sl" id="sleeves"></div>
+
+<div class="card" style="margin-top:12px">
+  <h2>Coins <span>was jedes System gerade macht</span></h2>
+  <div class="scroll"><table><thead><tr><th>Coin</th><th class="n">Kurs</th><th>A Trendfolge</th><th>B RSI-2</th><th class="n">C Momentum</th></tr></thead><tbody id="coinBody"></tbody></table></div>
+</div>
+
+<div class="card" style="margin-top:12px" id="lnCard">
+  <h2>Was der Bot selbst gelernt hat <span id="lnInfo"></span></h2>
+  <div class="scroll"><table><thead><tr><th>Signal</th><th class="n">Beobachtet</th><th class="n">Ø Ergebnis</th></tr></thead><tbody id="lnBody"></tbody></table></div>
+  <div class="grid" style="margin-top:6px"><div><h2 class="up" style="font-size:14px">Wann es gut läuft</h2><div id="lnGood" class="sub"></div></div><div><h2 class="down" style="font-size:14px">Wann es schlecht läuft</h2><div id="lnBad" class="sub"></div></div></div>
+  <p class="note">Selbstlern-Modus: Der Bot hat kein Vorwissen über die Zukunft. Er studiert das letzte gute Jahr als Schatten-Trades, lernt nach jeder 4-Stunden-Kerze neu und handelt nur Signale mit gelerntem Vorteil (ab 15 Beobachtungen, mindestens +0,1R). Den Hebel wählt er nach der Stärke des Vorteils.</p>
+</div>
+
+<div class="card" style="margin-top:12px" id="btCard">
+  <h2>So hätte er die letzten 3 Jahre abgeschnitten <span><a href="meta-replay.html">▶ selbst abspielen &amp; vorspulen</a></span></h2>
+  <div class="efig"><canvas id="btc"></canvas></div>
+  <div class="legend"><span><i style="background:#3ee08f"></i>Meta-Bot</span><span><i style="background:#e8f3ec66"></i>Einfach halten (6 Coins)</span><span><i style="background:#5aa8ff"></i>A allein</span><span><i style="background:#f2c14e"></i>B allein</span><span><i style="background:#a98bff"></i>C allein</span></div>
+  <div class="scroll" style="margin-top:8px"><table><thead><tr><th>Zeitraum</th><th class="n">Meta-Bot</th><th class="n">Max. Rückgang</th><th class="n">Einfach halten</th></tr></thead><tbody>
+    <tr><td>Nov 23 – Nov 24 (Bullenmarkt)</td><td class="n up">+50,6 %</td><td class="n">11,8 %</td><td class="n up">+229 %</td></tr>
+    <tr><td>Nov 24 – Nov 25</td><td class="n up">+16,9 %</td><td class="n">10,1 %</td><td class="n down">−14,8 %</td></tr>
+    <tr><td>Nov 25 – Nov 26 (Bärenmarkt)</td><td class="n up">+12,3 %</td><td class="n">10,6 %</td><td class="n down">−46,1 %</td></tr>
+    <tr><td><b>3 Jahre gesamt</b></td><td class="n up"><b>+96,9 %</b></td><td class="n"><b>11,8 %</b></td><td class="n up">+57,9 % (Rückgang 65,7 %)</td></tr>
+  </tbody></table></div>
+  <p class="note">Ehrlicher Hinweis: Die Bausteine wurden mit Wissen über diese Jahre ausgewählt. Echte Zukunftsergebnisse werden schwächer sein. Kosten (Gebühren, Slippage, Funding) sind eingerechnet.</p>
+</div>
+
+<div class="grid">
+  <div class="card"><h2>Live-Feed <span id="cdTxt"></span></h2><div class="log feed" id="feed"><div class="i">Drück auf Start.</div></div></div>
+  <div class="card"><h2>Abgeschlossene Trades <span id="histInfo"></span></h2>
+    <div class="scroll"><table><thead><tr><th>Coin</th><th>System</th><th>Grund</th><th class="n">Ergebnis</th></tr></thead><tbody id="histBody"></tbody></table></div>
+    <div class="empty" id="histEmpty">Noch keine Trades. Der Max-Bot handelt auf 4-Stunden- und Tageskerzen – rechne mit wenigen Trades pro Woche.</div></div>
+</div>
+
+<div class="card" style="margin-top:12px"><div class="row" style="margin-top:0"><button class="btn stop" type="button" id="resetBtn2">Konto zurücksetzen</button></div><p class="note">Feste Einstellung: Trendfolge Long/Short auf 4-Stunden-Kerzen mit Stop-Filter und Wende-Ausbruch, Hebel nach Sicherheit (Risiko ×3, max. 5x), Nachkaufen bei jedem weiteren +1R (bis 5×), dazu RSI-2 und Momentum mit BTC-Schalter. Im Backtest (3 Jahre, echte Kurse): 1.000 € → 17.873 €, zwischendurch bis 43 % Rückgang. Kein echtes Geld.</p></div>
+<details class="card" style="margin-top:12px" id="setCard">
+  <summary>Einstellungen &amp; Regeln</summary>
+  <form id="setForm" class="set"></form>
+  <div class="row"><button class="btn" type="button" id="saveBtn">Speichern</button><button class="btn stop" type="button" id="resetBtn">Konto zurücksetzen</button></div>
+  <div class="params" style="font-size:13px">
+    <p><b>A · Trendfolge Long/Short (40 %)</b> – 4-Stunden-Kerzen. Nur in Trendrichtung (EMA 50 gegen EMA 200). Einstieg, wenn der Kurs an die EMA 50 zurücksetzt und stark über (Long) bzw. unter (Short) der EMA 21 schließt. Zusätzlich <b>Wende-Ausbruch (nur Long)</b>: springt der Kurs mit mindestens 1,2-fachem Volumen über das Hoch der letzten 30 Kerzen und liegt die EMA 21 über der EMA 50, steigt er früh in neue Rallyes ein. Zwei Filter aus der Stop-Analyse (für Rücksetzer-Einstiege): kein Einstieg, wenn der ADX ≥ 30 ist (Trend überhitzt), oder wenn die Bollinger-Bandbreite unter 40 % ihrer letzten 120 Kerzen liegt (Markt zu eng). Stop 2 ATR, ab +1R Trailing-Stop 3 ATR hinter dem Hoch, kein festes Ziel. 3 % Risiko pro Trade, max. 2x Hebel.</p>
+    <p><b>Hebel-Automatik:</b> Jeder Trendfolge-Trade bekommt 0–3 Sicherheitspunkte – je einen für hohe Bollinger-Bandbreite (über 62 % der letzten 120 Kerzen), starkes Volumen (über 1,96× Schnitt) und ruhige Schwankung (ATR unter 1,73 %). Danach riskiert er 1 / 2,5 / 4 / 6 % des Kontos mal Risikostufe (Standard „Maximum“ ×4: also 4 / 10 / 16 / 24 % – höchstes Gewinnpotenzial im Backtest, aber Rückgänge bis ~45 %), der Hebel ergibt sich daraus (max. 5x). In den Tests liefen Trades mit 3 Punkten im Schnitt +1,5 bis +1,8R, Trades mit 0 Punkten etwa ±0.</p>
+    <p><b>Nachkaufen:</b> Läuft ein Trend-Trade +1R bzw. +2R ins Plus, kauft der Bot jeweils die halbe Startgröße dazu. Alle Teile haben denselben Trailing-Stop. So verdient er an den großen Trends deutlich mehr; im Test über 3 Jahre ein Vielfaches – bei etwas größeren Rückgängen.</p>
+    <p><b>B · RSI-2 nach Connors (30 %)</b> – Tageskerzen. Kauft, wenn der Coin über seiner 200-Tage-Linie liegt und der RSI(2) unter 10 fällt (kurzer Panik-Dip im Aufwärtstrend). Verkauft, sobald der Kurs über dem 5-Tage-Schnitt schließt.</p>
+    <p><b>C · Momentum mit Marktphasen-Schalter (30 %)</b> – Tageskerzen. Nur aktiv, wenn BTC über seiner 200-Tage-Linie liegt (Bullenmodus). Dann wird investiert, je nachdem wie viele von 5 Zeitfenstern (10–90 Tage) im Plus sind – 0 bis 100 %. Im Bärenmodus komplett raus.</p>
+    <p><b>Notbremse:</b> Fällt das Gesamtkonto 15 % unter sein Hoch, halbiert der Bot alle neuen Positionen.</p>
+  </div>
+  <p class="note"><a href="backtest.html">Backtest Arena</a> · <a href="krypto.html">Krypto Desk</a> · <a href="gold.html">Gold Desk</a> · <a href="./">Meme-Scalper</a></p>
+</details>
+</div>
+<div class="modal" id="modal"><div class="card"><h2>Konto zurücksetzen?</h2><p class="sub">Alle Positionen und Trades werden gelöscht.</p><div class="row"><button class="btn stop" id="mYes" type="button">Zurücksetzen</button><button class="btn" id="mNo" type="button">Abbrechen</button></div></div></div>
+
+<script id="btData" type="application/json">{"d":[1700784000000,1700956800000,1701129600000,1701302400000,1701475200000,1701648000000,1701820800000,1701993600000,1702166400000,1702339200000,1702512000000,1702684800000,1702857600000,1703030400000,1703203200000,1703376000000,1703548800000,1703721600000,1703894400000,1704067200000,1704240000000,1704412800000,1704585600000,1704758400000,1704931200000,1705104000000,1705276800000,1705449600000,1705622400000,1705795200000,1705968000000,1706140800000,1706313600000,1706486400000,1706659200000,1706832000000,1707004800000,1707177600000,1707350400000,1707523200000,1707696000000,1707868800000,1708041600000,1708214400000,1708387200000,1708560000000,1708732800000,1708905600000,1709078400000,1709251200000,1709424000000,1709596800000,1709769600000,1709942400000,1710115200000,1710288000000,1710460800000,1710633600000,1710806400000,1710979200000,1711152000000,1711324800000,1711497600000,1711670400000,1711843200000,1712016000000,1712188800000,1712361600000,1712534400000,1712707200000,1712880000000,1713052800000,1713225600000,1713398400000,1713571200000,1713744000000,1713916800000,1714089600000,1714262400000,1714435200000,1714608000000,1714780800000,1714953600000,1715126400000,1715299200000,1715472000000,1715644800000,1715817600000,1715990400000,1716163200000,1716336000000,1716508800000,1716681600000,1716854400000,1717027200000,1717200000000,1717372800000,1717545600000,1717718400000,1717891200000,1718064000000,1718236800000,1718409600000,1718582400000,1718755200000,1718928000000,1719100800000,1719273600000,1719446400000,1719619200000,1719792000000,1719964800000,1720137600000,1720310400000,1720483200000,1720656000000,1720828800000,1721001600000,1721174400000,1721347200000,1721520000000,1721692800000,1721865600000,1722038400000,1722211200000,1722384000000,1722556800000,1722729600000,1722902400000,1723075200000,1723248000000,1723420800000,1723593600000,1723766400000,1723939200000,1724112000000,1724284800000,1724457600000,1724630400000,1724803200000,1724976000000,1725148800000,1725321600000,1725494400000,1725667200000,1725840000000,1726012800000,1726185600000,1726358400000,1726531200000,1726704000000,1726876800000,1727049600000,1727222400000,1727395200000,1727568000000,1727740800000,1727913600000,1728086400000,1728259200000,1728432000000,1728604800000,1728777600000,1728950400000,1729123200000,1729296000000,1729468800000,1729641600000,1729814400000,1729987200000,1730160000000,1730332800000,1730505600000,1730678400000,1730851200000,1731024000000,1731196800000,1731369600000,1731542400000,1731715200000,1731888000000,1732060800000,1732233600000,1732406400000,1732579200000,1732752000000,1732924800000,1733097600000,1733270400000,1733443200000,1733616000000,1733788800000,1733961600000,1734134400000,1734307200000,1734480000000,1734652800000,1734825600000,1734998400000,1735171200000,1735344000000,1735516800000,1735689600000,1735862400000,1736035200000,1736208000000,1736380800000,1736553600000,1736726400000,1736899200000,1737072000000,1737244800000,1737417600000,1737590400000,1737763200000,1737936000000,1738108800000,1738281600000,1738454400000,1738627200000,1738800000000,1738972800000,1739145600000,1739318400000,1739491200000,1739664000000,1739836800000,1740009600000,1740182400000,1740355200000,1740528000000,1740700800000,1740873600000,1741046400000,1741219200000,1741392000000,1741564800000,1741737600000,1741910400000,1742083200000,1742256000000,1742428800000,1742601600000,1742774400000,1742947200000,1743120000000,1743292800000,1743465600000,1743638400000,1743811200000,1743984000000,1744156800000,1744329600000,1744502400000,1744675200000,1744848000000,1745020800000,1745193600000,1745366400000,1745539200000,1745712000000,1745884800000,1746057600000,1746230400000,1746403200000,1746576000000,1746748800000,1746921600000,1747094400000,1747267200000,1747440000000,1747612800000,1747785600000,1747958400000,1748131200000,1748304000000,1748476800000,1748649600000,1748822400000,1748995200000,1749168000000,1749340800000,1749513600000,1749686400000,1749859200000,1750032000000,1750204800000,1750377600000,1750550400000,1750723200000,1750896000000,1751068800000,1751241600000,1751414400000,1751587200000,1751760000000,1751932800000,1752105600000,1752278400000,1752451200000,1752624000000,1752796800000,1752969600000,1753142400000,1753315200000,1753488000000,1753660800000,1753833600000,1754006400000,1754179200000,1754352000000,1754524800000,1754697600000,1754870400000,1755043200000,1755216000000,1755388800000,1755561600000,1755734400000,1755907200000,1756080000000,1756252800000,1756425600000,1756598400000,1756771200000,1756944000000,1757116800000,1757289600000,1757462400000,1757635200000,1757808000000,1757980800000,1758153600000,1758326400000,1758499200000,1758672000000,1758844800000,1759017600000,1759190400000,1759363200000,1759536000000,1759708800000,1759881600000,1760054400000,1760227200000,1760400000000,1760572800000,1760745600000,1760918400000,1761091200000,1761264000000,1761436800000,1761609600000,1761782400000,1761955200000,1762128000000,1762300800000,1762473600000,1762646400000,1762819200000,1762992000000,1763164800000,1763337600000,1763510400000,1763683200000,1763856000000,1764028800000,1764201600000,1764374400000,1764547200000,1764720000000,1764892800000,1765065600000,1765238400000,1765411200000,1765584000000,1765756800000,1765929600000,1766102400000,1766275200000,1766448000000,1766620800000,1766793600000,1766966400000,1767139200000,1767312000000,1767484800000,1767657600000,1767830400000,1768003200000,1768176000000,1768348800000,1768521600000,1768694400000,1768867200000,1769040000000,1769212800000,1769385600000,1769558400000,1769731200000,1769904000000,1770076800000,1770249600000,1770422400000,1770595200000,1770768000000,1770940800000,1771113600000,1771286400000,1771459200000,1771632000000,1771804800000,1771977600000,1772150400000,1772323200000,1772496000000,1772668800000,1772841600000,1773014400000,1773187200000,1773360000000,1773532800000,1773705600000,1773878400000,1774051200000,1774224000000,1774396800000,1774569600000,1774742400000,1774915200000,1775088000000,1775260800000,1775433600000,1775606400000,1775779200000,1775952000000,1776124800000,1776297600000,1776470400000,1776643200000,1776816000000,1776988800000,1777161600000,1777334400000,1777507200000,1777680000000,1777852800000,1778025600000,1778198400000,1778371200000,1778544000000,1778716800000,1778889600000,1779062400000,1779235200000,1779408000000,1779580800000,1779753600000,1779926400000,1780099200000,1780272000000,1780444800000,1780617600000,1780790400000,1780963200000,1781136000000,1781308800000,1781481600000,1781654400000,1781827200000,1782000000000,1782172800000,1782345600000,1782518400000,1782691200000,1782864000000,1783036800000,1783209600000,1783382400000,1783555200000,1783728000000,1783900800000,1784073600000,1784246400000,1784419200000,1784592000000,1784764800000,1784937600000,1785110400000,1785283200000,1785456000000,1785628800000,1785801600000,1785974400000,1786147200000,1786320000000,1786492800000,1786665600000,1786838400000,1787011200000,1787184000000,1787356800000,1787529600000,1787702400000,1787875200000,1788048000000,1788220800000,1788393600000,1788566400000,1788739200000,1788912000000,1789084800000,1789257600000,1789430400000,1789603200000,1789776000000,1789948800000,1790121600000,1790294400000,1790467200000,1790640000000,1790812800000,1790985600000,1791158400000,1791331200000,1791504000000,1791676800000,1791849600000,1792022400000,1792195200000,1792368000000,1792540800000,1792713600000,1792886400000,1793059200000,1793232000000,1793404800000,1793577600000,1793750400000,1793923200000,1794096000000,1794268800000,1794441600000,1794614400000,1794787200000,1794960000000,1795132800000,1795305600000,1795392000000],"meta":[1000.0,999.5,999.7,1002.5,1026.7,1039.5,1047.0,1081.6,1078.1,1058.2,1079.6,1063.7,1052.5,1069.5,1100.9,1101.6,1096.5,1098.7,1088.7,1102.4,1078.2,1078.6,1060.0,1076.1,1090.7,1074.4,1074.0,1078.1,1066.5,1073.6,1059.2,1060.0,1069.3,1068.4,1064.7,1064.2,1060.5,1058.7,1074.0,1087.6,1093.7,1096.7,1097.3,1097.8,1098.8,1091.1,1096.7,1121.0,1184.8,1208.8,1217.2,1210.9,1254.7,1270.1,1302.6,1322.4,1313.3,1313.6,1233.7,1294.2,1283.3,1317.7,1314.9,1335.3,1345.7,1299.2,1310.2,1310.0,1323.2,1315.4,1286.7,1285.3,1260.7,1263.6,1274.8,1281.1,1276.3,1275.0,1271.2,1254.3,1258.2,1280.1,1282.4,1280.1,1276.2,1278.6,1269.6,1253.1,1256.9,1270.7,1269.9,1256.9,1256.6,1258.1,1248.9,1250.5,1256.0,1298.0,1277.0,1277.2,1251.1,1246.7,1250.7,1254.1,1250.9,1251.2,1251.7,1258.4,1256.3,1259.0,1250.2,1261.0,1294.7,1293.1,1294.7,1291.4,1281.0,1288.9,1294.2,1295.2,1310.9,1294.6,1285.4,1297.5,1288.4,1279.9,1256.1,1234.5,1237.0,1256.5,1255.3,1252.5,1254.9,1255.5,1249.3,1246.3,1240.6,1236.8,1229.5,1223.6,1222.0,1223.4,1222.2,1218.2,1219.6,1217.1,1215.1,1207.4,1211.6,1205.5,1202.0,1206.6,1205.0,1203.5,1226.7,1235.2,1194.2,1194.2,1193.8,1192.7,1192.0,1186.4,1187.3,1198.2,1204.0,1224.2,1224.5,1219.6,1205.4,1220.6,1258.1,1235.8,1230.1,1221.3,1278.1,1297.4,1346.6,1401.5,1394.4,1430.8,1446.3,1440.4,1499.1,1499.5,1467.8,1502.4,1533.9,1549.9,1562.4,1574.8,1592.6,1535.8,1565.8,1566.5,1580.4,1547.4,1522.7,1490.4,1525.4,1512.7,1515.0,1506.0,1512.0,1525.1,1519.7,1506.4,1486.9,1512.5,1497.2,1549.8,1563.8,1524.0,1529.2,1517.9,1518.8,1500.2,1495.5,1499.2,1476.3,1480.9,1457.9,1472.6,1471.7,1467.5,1464.0,1468.0,1468.8,1463.5,1460.4,1466.3,1466.4,1463.1,1493.4,1479.7,1471.2,1472.9,1492.5,1485.9,1484.5,1486.2,1486.4,1474.5,1473.6,1460.7,1458.7,1462.3,1469.6,1460.1,1456.2,1452.1,1485.5,1491.9,1482.2,1479.4,1481.7,1474.7,1472.4,1469.9,1464.2,1462.5,1461.6,1450.3,1452.1,1443.9,1434.3,1432.1,1549.8,1568.9,1580.5,1560.1,1550.6,1551.1,1570.9,1554.3,1555.1,1565.0,1537.8,1520.2,1528.2,1523.5,1507.0,1514.4,1550.2,1528.4,1528.6,1527.4,1520.2,1515.3,1522.2,1524.8,1525.0,1517.1,1515.4,1506.4,1498.4,1504.7,1501.8,1566.0,1573.6,1591.5,1640.2,1684.4,1729.1,1753.3,1701.1,1706.8,1710.0,1694.7,1638.1,1633.3,1649.0,1688.0,1704.3,1696.7,1757.3,1712.8,1718.2,1672.2,1684.1,1754.5,1722.7,1725.2,1722.4,1718.5,1717.7,1707.4,1705.7,1719.0,1732.9,1781.3,1773.5,1770.8,1782.0,1762.0,1733.4,1731.6,1702.0,1716.3,1716.3,1743.2,1748.8,1772.4,1768.7,1668.2,1719.4,1713.1,1709.7,1707.1,1706.3,1693.6,1686.9,1688.7,1683.9,1698.1,1689.5,1690.4,1689.2,1691.3,1688.9,1696.4,1712.5,1722.0,1735.1,1734.6,1761.5,1752.6,1752.6,1752.6,1755.5,1792.2,1777.5,1788.5,1779.0,1755.8,1753.9,1755.8,1780.2,1782.4,1763.4,1759.3,1760.4,1774.0,1763.0,1758.3,1755.5,1735.2,1735.2,1735.2,1735.5,1735.5,1732.5,1771.0,1753.0,1744.7,1744.7,1744.7,1745.1,1746.0,1745.8,1779.1,1845.7,1851.8,1923.1,1899.4,1899.4,1899.4,1899.4,1900.5,1903.1,1913.2,1903.6,1926.1,1913.4,1920.9,1914.4,1895.3,1879.1,1896.0,1885.5,1872.9,1861.3,1847.9,1846.4,1849.3,1851.4,1842.2,1832.8,1849.5,1848.3,1831.2,1838.3,1832.9,1828.1,1807.2,1799.1,1808.5,1798.8,1788.8,1789.8,1786.7,1797.5,1792.6,1796.1,1780.6,1781.5,1783.1,1775.5,1769.1,1764.1,1769.5,1756.1,1755.9,1736.7,1733.2,1733.1,1727.7,1722.7,1727.1,1735.6,1744.6,1751.6,1804.3,1852.7,1833.5,1832.8,1832.5,1832.1,1822.5,1820.0,1836.9,1832.9,1844.6,1859.5,1851.5,1847.9,1845.5,1836.8,1833.1,1833.1,1835.8,1821.5,1833.2,1827.9,1824.4,1821.1,1819.4,1817.2,1812.8,1821.5,1813.2,1808.5,1804.7,1797.6,1805.9,1800.8,1799.2,1792.0,1790.2,1785.4,1784.5,1864.7,1934.3,1942.3,1941.1,1932.4,1919.7,1906.0,1957.2,1957.7,1949.0,1924.0,1919.7,1901.3,1887.4,1897.8,1962.7,2036.1,2000.7,2022.2,2012.2,1988.7,1996.0,1993.7,2009.1,1962.6,1931.1,1945.2,1926.0,1913.2,1901.8,1901.7,1911.6,1906.1,1906.1,1900.0,1891.5,1890.2,1891.7,1885.6,1885.7,1900.0,1910.0,1919.8,1974.8,1962.1,1961.3,1972.0,1969.1,1968.9],"bh":[1000.0,998.3,1002.4,1008.3,1048.2,1076.2,1091.0,1170.2,1166.1,1110.9,1157.7,1129.8,1118.4,1155.5,1221.2,1224.6,1248.6,1261.5,1243.2,1280.0,1200.8,1215.7,1159.9,1208.5,1264.6,1214.2,1215.3,1225.5,1189.7,1202.1,1122.0,1119.7,1169.5,1202.4,1162.0,1178.9,1161.5,1173.5,1217.0,1257.0,1293.2,1336.0,1356.2,1355.1,1366.1,1348.4,1362.8,1424.9,1582.7,1670.0,1724.8,1694.4,1857.4,1914.2,2039.4,2099.4,2064.1,2021.6,1778.9,1961.3,1926.4,2071.3,2062.0,2150.6,2200.3,1973.7,2018.8,2024.1,2119.0,2096.1,1914.7,1833.5,1756.4,1770.1,1850.4,1906.7,1836.6,1802.3,1798.6,1695.8,1707.5,1839.7,1845.4,1766.2,1757.6,1755.1,1743.7,1820.9,1887.6,2035.9,2017.3,1989.4,1989.9,2000.3,1967.0,1974.2,1982.6,2071.6,1967.5,1962.1,1841.1,1835.4,1841.8,1822.7,1779.2,1764.7,1724.9,1741.1,1776.8,1728.8,1766.3,1701.7,1558.4,1535.3,1608.1,1607.0,1697.5,1851.7,1865.3,1911.3,2006.4,1934.0,1885.1,1944.0,1935.0,1893.0,1742.3,1605.6,1550.5,1740.8,1694.9,1682.5,1656.7,1631.7,1643.3,1683.8,1712.7,1806.7,1735.3,1647.1,1639.5,1562.4,1574.0,1556.1,1511.2,1590.7,1582.0,1667.5,1618.7,1626.1,1697.6,1758.6,1749.9,1740.3,1836.1,1856.2,1692.9,1623.1,1672.0,1674.1,1651.9,1697.1,1703.6,1783.8,1807.7,1870.7,1881.2,1843.5,1785.6,1865.0,1989.9,1888.9,1869.2,1819.9,2067.4,2147.2,2381.2,2646.4,2638.3,2866.6,2935.5,2920.5,3255.7,3277.8,3085.3,3267.0,3456.4,3625.6,3699.4,3767.7,3878.9,3513.7,3646.6,3647.4,3713.9,3456.7,3305.6,3170.5,3381.6,3227.1,3308.4,3213.2,3323.0,3579.1,3558.3,3382.2,3227.8,3373.6,3309.8,3700.5,3852.1,3693.8,3815.9,3765.3,3772.2,3625.6,3579.2,3628.0,3190.4,3114.3,2983.1,3063.4,3088.6,3188.5,3233.3,3179.1,3044.7,3130.2,3084.9,2744.7,2621.9,2613.8,3080.2,2670.4,2727.3,2617.2,2262.1,2434.1,2491.6,2446.3,2469.4,2530.0,2511.7,2651.4,2618.5,2498.3,2396.8,2461.7,2348.4,2389.7,2151.5,2308.2,2292.3,2346.8,2305.6,2346.5,2377.6,2379.6,2582.0,2578.9,2579.6,2563.0,2604.8,2571.8,2539.2,2555.3,2949.8,3053.4,3194.9,3026.7,2972.0,3034.5,3121.9,3054.0,3091.0,3126.0,3023.7,2886.9,2926.2,2891.5,2800.8,2872.4,3052.1,2875.1,2804.1,2843.2,2793.3,2708.6,2567.0,2773.8,2714.9,2789.5,2832.4,2860.2,2807.1,2880.6,2891.0,3159.4,3198.6,3272.1,3440.7,3631.6,3803.7,3935.8,3663.2,3704.0,3699.5,3637.0,3404.1,3395.3,3430.4,3692.3,3796.2,3723.1,4043.4,3814.8,3876.9,3604.0,3662.8,3972.3,3684.5,3823.3,3751.5,3728.0,3782.4,3725.5,3738.7,3918.5,3991.0,4243.4,4206.3,4195.5,4291.2,4236.4,3983.7,3987.5,3833.8,3937.8,3936.1,4288.1,4271.9,4422.8,4376.5,3651.5,3936.0,3875.6,3626.2,3612.7,3724.0,3569.5,3735.8,3887.5,3762.5,3590.5,3656.6,3359.6,3293.3,3340.2,3398.1,3290.6,3148.0,3079.0,2941.7,2950.6,2724.8,2791.8,2921.6,2976.4,2925.5,2730.8,3040.2,2853.1,2866.1,2986.6,2919.2,2875.9,2731.5,2665.3,2747.8,2753.8,2709.0,2646.6,2694.4,2677.4,2674.0,2875.2,2946.5,3074.3,2936.6,2914.4,2911.9,3089.4,3012.1,2930.7,2728.2,2759.7,2750.3,2718.6,2763.6,2563.8,2268.6,2247.7,1820.2,2035.2,2029.5,1910.8,1991.0,2020.8,2009.0,1960.8,1995.4,1877.9,2032.9,1925.2,1929.3,1965.1,2030.3,1936.1,1963.4,2010.4,2043.4,2109.0,2169.8,2043.7,2003.6,2059.1,2072.6,1926.8,1914.7,1967.7,1906.7,1927.6,1938.2,1983.9,2020.2,1963.6,2036.5,2124.2,2091.3,2082.3,2115.8,2111.4,2130.1,2077.7,2085.1,2124.5,2141.0,2200.8,2189.6,2258.6,2210.7,2243.8,2140.8,2094.8,2094.4,2055.3,2078.6,2053.1,2007.6,2065.3,2023.3,1823.8,1653.8,1741.5,1703.9,1738.7,1762.5,1839.4,1786.8,1735.1,1738.6,1699.5,1621.4,1632.7,1658.5,1654.6,1762.7,1784.9,1745.1,1716.9,1727.1,1695.8,1764.7,1721.9,1738.6,1779.8,1727.2,1726.9,1710.6,1716.4,1703.3,1725.0,1721.4,1708.7,1737.1,1714.7,1715.8,1712.0,1701.5,1730.8,2012.2,2187.5,2228.5,2221.0,2184.9,2147.8,2136.7,2256.5,2262.2,2248.8,2206.5,2195.8,2159.4,2106.7,2158.4,2311.5,2492.2,2398.6,2472.7,2452.2,2406.8,2424.3,2424.2,2453.2,2347.9,2268.9,2305.5,2252.2,2205.7,2164.4,2184.4,2244.7,2166.4,2140.0,2168.9,2055.3,2061.8,2036.1,2129.7,1992.8,1920.2,1869.9,1826.6,1601.4,1640.8,1633.3,1518.4,1569.3,1578.8],"A":[1000.0,998.6,996.5,999.5,1032.1,1045.2,1054.9,1089.1,1082.8,1073.3,1083.9,1065.8,1044.5,1056.8,1091.6,1089.8,1065.7,1066.5,1051.4,1064.6,1046.8,1041.9,1033.7,1032.7,1039.5,1022.9,1023.1,1025.8,1015.3,1015.6,1012.2,1012.5,1011.1,998.2,1000.2,993.6,993.1,984.8,1002.2,1014.6,1010.2,994.1,988.1,988.6,985.5,977.2,979.5,1006.5,1075.8,1088.4,1084.5,1082.2,1104.7,1112.9,1134.4,1152.0,1144.8,1150.2,1121.6,1125.5,1115.4,1142.8,1138.7,1149.9,1154.5,1133.5,1134.2,1130.3,1134.0,1126.0,1112.1,1123.8,1118.2,1118.2,1120.5,1123.9,1132.9,1140.1,1134.6,1143.7,1147.4,1143.4,1144.9,1162.6,1160.0,1163.9,1147.3,1107.0,1097.9,1093.1,1097.8,1083.3,1081.6,1076.1,1067.3,1065.5,1075.0,1127.3,1105.1,1105.1,1099.6,1093.3,1097.3,1101.9,1104.7,1110.3,1121.7,1130.4,1123.2,1133.7,1110.6,1141.9,1242.3,1242.5,1235.9,1228.0,1203.3,1193.1,1193.1,1186.1,1189.2,1177.2,1171.5,1179.4,1163.6,1157.2,1165.8,1180.7,1192.4,1186.4,1183.6,1177.0,1182.6,1183.9,1169.5,1162.3,1149.1,1140.8,1144.0,1157.2,1154.6,1164.4,1159.7,1154.7,1160.6,1151.9,1147.2,1128.9,1138.8,1124.5,1116.4,1127.0,1123.2,1120.2,1157.4,1171.1,1136.5,1136.5,1135.8,1133.1,1131.4,1118.2,1120.3,1146.6,1150.2,1173.8,1172.8,1172.6,1155.8,1163.4,1205.4,1189.7,1185.7,1186.3,1223.9,1236.7,1256.1,1280.1,1266.7,1268.2,1279.8,1270.9,1292.8,1287.2,1280.9,1290.3,1299.1,1283.7,1291.2,1294.9,1302.8,1273.7,1279.1,1278.8,1289.8,1270.6,1267.7,1257.5,1262.7,1261.6,1255.6,1250.7,1249.4,1234.8,1228.3,1231.1,1226.8,1237.9,1226.7,1255.0,1262.6,1222.4,1209.0,1200.2,1200.4,1186.7,1190.3,1180.5,1225.3,1256.7,1256.7,1257.3,1252.0,1240.4,1229.3,1238.5,1253.1,1232.9,1236.1,1291.8,1318.0,1318.5,1307.7,1311.6,1289.9,1307.1,1375.2,1342.3,1338.6,1343.6,1341.8,1315.2,1316.0,1287.5,1287.9,1318.9,1349.6,1327.6,1324.2,1309.8,1385.4,1385.4,1362.8,1356.4,1361.7,1345.5,1340.3,1334.7,1322.3,1318.4,1318.9,1298.3,1292.9,1282.2,1271.3,1262.8,1415.7,1433.0,1418.9,1419.1,1413.2,1391.7,1416.4,1400.8,1394.3,1404.2,1374.1,1374.1,1380.1,1376.5,1362.6,1364.3,1403.6,1397.0,1410.6,1402.6,1397.6,1400.0,1435.9,1421.6,1427.4,1403.9,1392.6,1369.6,1367.6,1365.4,1356.6,1427.1,1431.6,1448.2,1508.4,1551.8,1599.6,1615.3,1582.0,1577.9,1577.2,1561.0,1536.8,1536.6,1522.5,1556.1,1568.7,1570.9,1627.4,1594.7,1590.6,1551.4,1543.9,1591.7,1590.0,1564.8,1573.3,1569.7,1555.3,1544.0,1536.8,1533.2,1546.6,1591.3,1582.8,1581.6,1581.5,1550.8,1546.3,1547.3,1544.5,1544.6,1543.5,1540.7,1552.7,1569.5,1567.8,1528.6,1533.2,1518.9,1534.1,1532.9,1527.8,1518.5,1488.2,1477.2,1482.7,1529.8,1502.5,1544.8,1567.4,1566.0,1560.4,1577.8,1620.7,1641.7,1678.6,1671.6,1736.8,1714.8,1714.8,1714.8,1721.9,1812.1,1775.0,1802.6,1778.6,1720.8,1716.1,1717.6,1777.6,1782.9,1735.2,1725.1,1727.7,1761.2,1734.1,1722.5,1715.5,1666.0,1666.0,1666.0,1666.9,1666.8,1659.7,1752.0,1707.5,1687.5,1687.5,1687.5,1688.4,1690.4,1690.1,1771.2,1938.4,1954.0,2144.3,2078.3,2078.3,2078.3,2078.3,2081.2,2088.4,2116.1,2089.5,2151.4,2115.9,2136.7,2118.6,2065.6,2021.6,2067.2,2038.4,2004.4,1973.4,1938.0,1934.0,1941.6,1947.2,1922.7,1898.4,1941.6,1938.5,1893.8,1912.1,1898.0,1885.7,1831.8,1811.2,1834.9,1810.3,1785.2,1787.7,1779.9,1806.9,1794.7,1803.4,1764.5,1766.8,1770.6,1751.7,1736.1,1723.8,1736.8,1704.1,1703.6,1657.1,1648.8,1648.7,1635.6,1624.0,1634.4,1654.5,1675.8,1692.6,1821.1,1944.1,1893.5,1891.8,1891.1,1889.9,1865.2,1858.8,1901.9,1891.4,1921.3,1960.0,1939.1,1929.6,1923.2,1900.7,1891.1,1891.2,1898.0,1861.2,1890.9,1877.3,1868.4,1859.9,1855.6,1850.0,1838.9,1860.9,1839.8,1827.7,1818.1,1800.2,1820.9,1808.1,1804.2,1786.2,1781.5,1769.8,1767.4,1970.3,2049.4,2040.7,2040.7,2040.7,2030.5,1999.7,2069.0,2065.6,2050.5,2012.7,1995.0,1973.0,1952.4,1957.1,2061.3,2145.5,2112.6,2120.5,2107.6,2075.3,2084.3,2078.5,2092.4,2032.4,2032.4,2032.0,2001.8,1993.3,1989.7,1977.1,1982.1,1985.9,1994.4,1969.8,1979.2,1974.5,1995.0,1942.6,1978.3,2026.7,2060.8,2093.2,2255.6,2219.3,2217.1,2247.3,2239.1,2238.4],"B":[1000.0,1000.0,1000.0,1000.0,1000.0,1000.0,1000.0,1000.0,1000.0,1000.6,1014.1,1014.1,1015.9,1023.6,1023.6,1023.6,1023.6,1023.6,1023.6,1023.6,1023.2,1022.7,1005.8,1030.5,1041.1,1041.2,1039.9,1042.2,1043.1,1063.2,1059.5,1062.9,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1080.5,1074.7,1081.0,1081.0,1081.0,1081.0,1081.0,1081.0,1081.0,1081.0,1081.0,1081.0,1080.8,1103.6,1037.2,1120.3,1120.3,1120.3,1120.3,1120.3,1120.3,1119.7,1141.9,1146.0,1147.9,1147.9,1147.4,1162.3,1116.0,1122.1,1133.1,1133.1,1133.1,1132.6,1129.1,1098.0,1105.8,1152.4,1152.4,1152.2,1148.2,1149.4,1150.4,1151.2,1154.9,1154.9,1154.9,1154.9,1154.7,1162.4,1162.4,1166.0,1165.4,1176.8,1176.5,1179.8,1144.5,1149.1,1153.0,1160.7,1153.6,1150.9,1139.9,1148.8,1152.2,1152.2,1152.2,1151.9,1127.3,1122.1,1134.8,1134.8,1134.8,1134.8,1134.8,1134.8,1134.8,1134.8,1134.6,1137.8,1137.8,1137.3,1106.5,1050.8,1042.9,1105.1,1105.1,1105.1,1105.1,1105.1,1105.1,1105.1,1105.1,1105.1,1104.9,1101.8,1100.4,1092.1,1094.4,1088.7,1085.5,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.8,1088.6,1085.7,1089.8,1089.8,1089.8,1088.1,1081.3,1098.1,1098.1,1098.1,1098.1,1098.1,1098.1,1098.1,1097.9,1102.6,1102.6,1097.4,1110.5,1114.7,1114.5,1117.4,1122.6,1122.6,1119.3,1151.6,1151.6,1151.6,1150.9,1120.0,1080.4,1122.8,1122.8,1122.8,1122.8,1122.8,1122.8,1122.8,1122.8,1116.1,1134.3,1120.6,1143.4,1143.4,1143.4,1143.4,1143.4,1143.4,1143.4,1132.8,1153.0,1107.1,1089.9,1046.8,1077.8,1081.1,1081.1,1085.4,1085.4,1085.2,1087.6,1082.1,1054.9,1028.9,1023.6,1093.0,1093.0,1093.0,1093.0,1082.8,1101.7,1101.7,1101.7,1101.7,1101.7,1101.7,1101.7,1101.7,1091.0,1085.2,1085.5,1079.4,1084.9,1084.6,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1100.2,1097.8,1097.5,1114.5,1114.5,1114.5,1114.5,1114.3,1117.6,1117.6,1117.6,1117.6,1117.6,1117.4,1116.1,1119.8,1119.8,1124.7,1126.7,1126.7,1126.7,1126.7,1126.7,1126.7,1126.5,1122.2,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1130.1,1127.4,1131.3,1139.4,1138.9,1097.3,1094.4,1137.2,1137.2,1137.2,1137.2,1137.2,1137.2,1137.2,1130.6,1158.3,1203.4,1203.4,1203.4,1203.4,1203.2,1210.4,1210.8,1210.8,1210.8,1210.8,1210.8,1210.8,1210.8,1210.8,1210.8,1209.6,1205.3,1180.7,1199.2,1199.2,1199.2,1199.2,1199.2,1200.9,1163.9,1240.4,1258.5,1258.3,1260.3,1264.4,1259.0,1269.5,1269.5,1269.5,1269.0,1274.7,1252.7,1231.4,1237.8,1237.8,1237.8,1231.9,1233.1,1227.6,1233.1,1233.1,1233.1,1233.1,1233.1,1233.1,1233.1,1233.1,1233.1,1233.1,1233.1,1233.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1236.1,1254.3,1250.9,1266.8,1266.8,1266.8,1266.8,1266.8,1266.8,1266.8,1266.8,1266.8,1266.5,1273.3,1272.0,1239.1,1257.5,1261.0,1256.2,1248.5,1253.9,1258.8,1258.8,1256.0,1259.2,1260.7,1261.1,1250.9,1270.3,1270.3,1270.3,1270.3,1270.3,1270.3,1270.3,1270.3,1270.3,1270.3,1270.3],"C":[1000.0,1000.1,1003.3,1008.9,1046.5,1072.1,1084.5,1157.8,1154.0,1095.9,1140.7,1109.9,1098.5,1131.6,1193.1,1198.2,1214.9,1221.7,1207.6,1237.9,1175.7,1185.0,1148.8,1180.5,1211.5,1176.5,1176.0,1184.4,1156.9,1159.8,1117.2,1115.9,1132.2,1148.5,1132.0,1140.1,1127.8,1134.1,1162.0,1192.0,1221.1,1258.5,1270.8,1271.6,1280.6,1272.2,1282.2,1330.0,1461.4,1537.5,1580.3,1552.5,1698.6,1751.2,1855.7,1910.4,1883.0,1830.9,1631.4,1759.6,1731.0,1830.0,1825.4,1896.1,1934.6,1762.0,1775.1,1776.1,1825.2,1806.0,1705.3,1651.4,1623.1,1625.9,1653.5,1674.1,1635.5,1616.7,1616.1,1571.3,1569.5,1601.7,1608.4,1566.4,1559.6,1560.8,1552.3,1556.7,1584.3,1650.5,1637.6,1610.5,1613.0,1619.3,1597.8,1602.9,1608.4,1667.7,1622.1,1618.6,1567.5,1554.0,1557.7,1552.6,1543.6,1538.2,1533.7,1532.6,1532.8,1524.7,1530.7,1517.4,1509.0,1509.0,1509.0,1509.0,1509.0,1557.1,1578.4,1594.8,1653.8,1607.8,1580.5,1611.3,1602.6,1579.8,1509.1,1473.5,1473.5,1473.5,1473.5,1473.5,1473.5,1473.5,1473.5,1473.5,1473.5,1472.4,1438.4,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1397.1,1396.0,1424.0,1434.7,1333.1,1333.1,1333.1,1333.1,1333.1,1333.1,1333.1,1331.8,1348.0,1386.3,1389.2,1371.2,1347.5,1387.7,1463.4,1402.6,1389.6,1364.3,1497.3,1552.1,1718.0,1909.3,1903.5,2068.2,2117.9,2109.0,2341.3,2357.2,2218.6,2345.4,2479.4,2606.6,2649.7,2695.9,2775.6,2536.8,2614.6,2619.3,2666.5,2535.0,2475.5,2415.0,2495.8,2429.3,2457.1,2421.2,2456.9,2567.4,2555.0,2471.4,2391.9,2461.3,2437.5,2598.6,2656.1,2543.0,2609.5,2570.5,2575.0,2509.0,2495.9,2499.4,2347.8,2328.0,2300.3,2308.3,2309.7,2316.1,2315.7,2313.7,2282.3,2299.1,2286.4,2236.8,2232.4,2225.9,2253.9,2175.7,2182.4,2151.9,2119.4,2119.4,2120.2,2118.0,2122.7,2121.9,2116.2,2115.4,2104.8,2074.9,2056.4,2056.4,2056.4,2056.4,2056.4,2056.4,2056.4,2056.4,2056.4,2056.4,2056.4,2056.4,2055.3,2055.1,2049.8,2039.7,2059.5,2043.5,2025.5,2034.3,2234.5,2287.5,2374.6,2273.0,2239.7,2280.7,2324.1,2275.1,2292.9,2320.0,2252.4,2169.0,2187.4,2172.5,2112.7,2140.4,2226.9,2136.7,2110.3,2120.6,2097.5,2070.8,2039.6,2064.2,2053.7,2063.6,2077.8,2081.5,2048.3,2081.6,2086.1,2239.9,2266.6,2318.0,2425.9,2551.5,2672.4,2763.0,2571.9,2600.8,2599.5,2558.6,2420.7,2401.8,2414.7,2534.8,2589.1,2546.1,2728.6,2571.9,2608.0,2476.8,2490.4,2637.6,2482.3,2546.8,2514.5,2503.2,2515.2,2488.0,2495.3,2568.0,2607.6,2750.5,2729.7,2718.6,2776.1,2743.8,2608.8,2607.0,2516.2,2546.6,2549.1,2689.8,2690.1,2772.6,2752.6,2408.5,2485.9,2449.9,2402.2,2388.4,2387.5,2357.8,2369.8,2401.9,2367.3,2335.2,2340.8,2296.9,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2282.8,2280.4,2441.0,2488.3,2482.2,2444.1,2406.5,2397.7,2501.7,2508.4,2495.3,2450.1,2424.5,2389.1,2333.8,2369.2,2471.2,2644.6,2545.3,2624.0,2602.2,2554.0,2570.5,2570.6,2600.0,2501.9,2432.1,2456.2,2416.7,2386.1,2359.2,2368.3,2392.2,2363.5,2355.2,2362.6,2308.6,2309.8,2302.7,2323.2,2266.7,2250.1,2239.3,2230.6,2215.2,2215.2,2215.2,2215.2,2215.2,2215.2]}</script>
+<script>
+{
+const KEY='maxbotcloud.v1',CLOUDMODE=true,COINS=['BTC','ETH','SOL','BNB','XRP','DOGE'];
+const FEE=0.001,FFEE=0.0005,SLIP=0.0002,FUND=0.0001;
+const SLV={A:{n:'A · Trendfolge L/S',c:'#5aa8ff',w:0.4},B:{n:'B · RSI-2',c:'#f2c14e',w:0.3},C:{n:'C · Momentum + Schalter',c:'#a98bff',w:0.3}};
+const MAXCFG={mode:'fix',lvl:3,pyr:true,adds:5,autoLev:true,lvlV2:true};
+const DEF={capital:1000,riskA:3,brake:15,...MAXCFG};
+const now=()=>Date.now()+(window.__t||0);
+function newAcc(cap,rate){const u=cap/rate,s={};for(const k in SLV){s[k]={};for(const c of COINS)s[k][c]={cash:u*SLV[k].w/COINS.length,pos:null}}return s}
+function fresh(st){st=st||{...DEF};return{settings:st,eurRate:0.92,acc:newAcc(st.capital,0.92),start:st.capital/0.92,peak:st.capital/0.92,closed:[],equity:[],done:{},logs:[],running:false,cool:{}}}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.acc){s.settings={...DEF,...s.settings};if(!s.settings.lvlV2){s.settings.lvl=4;s.settings.lvlV2=true}return s}}catch(e){}return fresh()}
+let S=load();Object.assign(S.settings,MAXCFG);   // feste Max-Einstellung, nicht änderbar
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){try{S.equity=S.equity.filter((x,i)=>i%2===0);S.closed.length=Math.min(S.closed.length,200);localStorage.setItem(KEY,JSON.stringify(S))}catch(e2){}}}
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const eur=(u,d=2)=>(u*S.eurRate).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d})+' €';
+const pct=(x,d=1)=>(x>=0?'+':'')+x.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d})+' %';
+const px=v=>v>=1000?v.toLocaleString('de-DE',{maximumFractionDigits:0}):v>=1?v.toLocaleString('de-DE',{maximumFractionDigits:2}):v.toLocaleString('de-DE',{maximumFractionDigits:4});
+const hhmm=t=>new Date(t).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+function log(cls,msg){S.logs.unshift({t:now(),cls,msg});if(S.logs.length>200)S.logs.length=200;dirty=true}
+
+/* ---------- Daten ---------- */
+const M={};for(const c of COINS)M[c]={h4:[],d1:[],price:0};
+let ws=null,wsState='off',lastMsg=0;
+async function kl(sym,iv,n){for(const b of ['https://data-api.binance.vision','https://api.binance.com']){try{const r=await fetch(`${b}/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${n}`,{cache:'no-store'});if(r.ok)return(await r.json()).map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}))}catch(e){}}return null}
+async function klAll(sym,iv,start){const step=iv==='4h'?4*3600e3:864e5;let t=start,out=[];while(t<Date.now()){let j=null;for(const b of ['https://data-api.binance.vision','https://api.binance.com']){try{const r=await fetch(`${b}/api/v3/klines?symbol=${sym}&interval=${iv}&startTime=${t}&limit=1000`,{cache:'no-store'});if(r.ok){j=await r.json();break}}catch(e){}}
+  if(!j||!j.length)break;for(const k of j)out.push({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]});t=j[j.length-1][0]+step;if(j.length<1000)break}return out.length?out:null}
+async function history(){let ok=0;await Promise.all(COINS.map(async c=>{const a=await klAll(c+'USDT','4h',Date.now()-430*864e5),b=await kl(c+'USDT','1d',700);if(a&&b){M[c].h4=a;M[c].d1=b;M[c].price=a[a.length-1].c;ok++}}));return ok}
+function connect(){
+  if(ws)try{ws.close()}catch(e){}
+  const st=[...COINS.flatMap(c=>{const s=c.toLowerCase()+'usdt';return[s+'@kline_4h',s+'@kline_1d',s+'@miniTicker']}),'eurusdt@miniTicker'].join('/');
+  const url=['wss://data-stream.binance.vision/stream?streams=','wss://stream.binance.com:9443/stream?streams='][((connect.n=(connect.n||0)+1)%2===1)?0:1]+st;
+  wsState='connecting';renderConn();try{ws=new WebSocket(url)}catch(e){wsState='err';renderConn();return}
+  ws.onopen=()=>{wsState='live';renderConn();log('b','Live-Verbindung zu Binance steht')};
+  ws.onmessage=e=>{lastMsg=now();let m;try{m=JSON.parse(e.data)}catch(x){return}onData(m.data||m)};
+  ws.onclose=()=>{wsState='err';renderConn();setTimeout(connect,3000)};ws.onerror=()=>{wsState='err';renderConn()}}
+function onData(d){
+  if(d.s==='EURUSDT'&&d.c){S.eurRate=1/+d.c;return}
+  const c=String(d.s||'').replace(/USDT$/,'');if(!M[c])return;
+  if(d.e==='24hrMiniTicker'){M[c].price=+d.c;if(S.running)tick(c);dirty=true;return}
+  if(d.e==='kline'){const k=d.k,cd={t:k.t,o:+k.o,h:+k.h,l:+k.l,c:+k.c,v:+k.v},arr=k.i==='4h'?M[c].h4:M[c].d1;
+    const last=arr[arr.length-1];if(last&&last.t===cd.t)arr[arr.length-1]=cd;else if(!last||cd.t>last.t){arr.push(cd);if(arr.length>3000)arr.shift()}
+    M[c].price=cd.c;if(S.running){tick(c);if(k.x)setTimeout(()=>process(c),50)}dirty=true}}
+async function poll(){if(wsState==='live'&&now()-lastMsg<20000)return;
+  try{const r=await fetch('https://data-api.binance.vision/api/v3/ticker/price?symbols='+encodeURIComponent(JSON.stringify(COINS.map(c=>c+'USDT'))),{cache:'no-store'});if(!r.ok)return;
+    for(const x of await r.json()){const c=x.symbol.replace('USDT','');M[c].price=+x.price;if(S.running)tick(c)}
+    if(wsState!=='live'){wsState='poll';renderConn()}
+    // Kerzenschlüsse im Notbetrieb: alle 4 h bzw. täglich neu laden
+    const step=4*3600e3;for(const c of COINS){const L=M[c].h4[M[c].h4.length-1];if(L&&now()>=L.t+2*step){const a=await kl(c+'USDT','4h',400),b=await kl(c+'USDT','1d',300);if(a)M[c].h4=a;if(b)M[c].d1=b;process(c)}}dirty=true}catch(e){}}
+
+/* ---------- Indikatoren ---------- */
+function ema(v,n){const k=2/(n+1);let e=v[0];return v.map((x,i)=>i?(e=x*k+e*(1-k)):e)}
+function rma(v,n){let e=v[0];return v.map((x,i)=>i?(e=(e*(n-1)+x)/n):e)}
+function sma(v,n,i){if(i<n-1)return NaN;let s=0;for(let j=i-n+1;j<=i;j++)s+=v[j];return s/n}
+function atrA(cs){return rma(cs.map((x,i)=>i?Math.max(x.h-x.l,Math.abs(x.h-cs[i-1].c),Math.abs(x.l-cs[i-1].c)):x.h-x.l),14)}
+function rsiA(cl,n){const g=rma(cl.map((x,i)=>i?Math.max(0,x-cl[i-1]):0),n),l=rma(cl.map((x,i)=>i?Math.max(0,cl[i-1]-x):0),n);return g.map((x,i)=>l[i]===0?100:100-100/(1+x/l[i]))}
+function adxA(cs){const n=cs.length,pd=[0],md=[0],tr=[cs[0].h-cs[0].l];for(let i=1;i<n;i++){const u=cs[i].h-cs[i-1].h,d=cs[i-1].l-cs[i].l;pd.push(u>d&&u>0?u:0);md.push(d>u&&d>0?d:0);tr.push(Math.max(cs[i].h-cs[i].l,Math.abs(cs[i].h-cs[i-1].c),Math.abs(cs[i].l-cs[i-1].c)))}
+  const a=rma(tr,14),p=rma(pd,14),m=rma(md,14),dx=p.map((x,i)=>{const P=100*x/a[i],M=100*m[i]/a[i];return 100*Math.abs(P-M)/Math.max(P+M,1e-12)});return rma(dx,14)}
+function bwPct(cl,i){const bw=j=>{let s=0,q=0;for(let k=j-19;k<=j;k++){s+=cl[k];q+=cl[k]*cl[k]}const m=s/20,sd=Math.sqrt(Math.max(0,q/20-m*m));return 4*sd/m};
+  const cur=bw(i);let le=0,n=0;for(let j=i-119;j<=i;j++){if(j<19)continue;n++;if(bw(j)<=cur)le++}return n?le/n:0}
+const closed=a=>a.slice(0,-1);   // letzte Kerze läuft noch
+function regime(){const cs=closed(M.BTC.d1),cl=cs.map(x=>x.c),n=cl.length-1;if(n<200)return null;const s=sma(cl,200,n);return{bull:cl[n]>s,c:cl[n],s}}
+
+/* ---------- Selbstlern-Modus: lernt nur aus Vergangenem ---------- */
+const LT={pL:'Rücksetzer Long',pS:'Rücksetzer Short',bL:'Ausbruch Long',bS:'Ausbruch Short'},LK=20;let LRN=null;
+function pctR(v,w=120){return v.map((x,i)=>{let le=0,k=0;for(let j=Math.max(0,i-w+1);j<=i;j++){if(!isFinite(v[j]))continue;k++;if(v[j]<=x)le++}return k?le/k:0.5})}
+function lPrep(cs){const cl=cs.map(x=>x.c),at=atrA(cs),bw=cl.map((x,i)=>{if(i<19)return NaN;let s=0,q=0;for(let k=i-19;k<=i;k++){s+=cl[k];q+=cl[k]*cl[k]}const m=s/20;return 4*Math.sqrt(Math.max(0,q/20-m*m))/m});
+  const mx=(i,f,n)=>{let m=f>0?-Infinity:Infinity;for(let j=Math.max(0,i-n);j<i;j++)m=f>0?Math.max(m,cs[j].h):Math.min(m,cs[j].l);return m};
+  return{h:cs,i4:new Map(cs.map((x,i)=>[x.t,i])),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:at,r14:rsiA(cl,14),adx:adxA(cs),bwp:pctR(bw),atp:pctR(at.map((v,i)=>v/cl[i])),
+    hi30:cs.map((x,i)=>mx(i,1,30)),lo30:cs.map((x,i)=>mx(i,-1,30)),av20:cs.map((x,i)=>{let s=0,k=0;for(let j=Math.max(0,i-20);j<i;j++){s+=cs[j].v;k++}return k?s/k:x.v})}}
+function Lm(k){const o=LRN.st[k];return o?o.s/(o.n+LK):0}
+function Ln(k){return LRN.st[k]?LRN.st[k].n:0}
+function Ladd(k,r){const o=LRN.st[k]||(LRN.st[k]={n:0,s:0});o.n++;o.s+=r}
+function lFeats(P,i,x,sd,bull){const ad=P.adx[i],bw=P.bwp[i],vr=x.v/P.av20[i],ap=P.atp[i];
+  return['Trendstärke '+(ad<20?'schwach':ad<30?'mittel':'stark'),'Bandbreite '+(bw<1/3?'eng':bw<2/3?'mittel':'weit'),'Volumen '+(vr<1.2?'normal':vr<2?'erhöht':'stark'),'Schwankung '+(ap<1/3?'ruhig':ap<2/3?'mittel':'wild'),'BTC-Phase '+((bull?1:-1)===sd?'passt':'dagegen')]}
+function lPredict(ty,fs){let e=Lm('T:'+ty);const all=Lm('ALL');for(const f of fs)e+=Lm(f)-all;return e}
+function lSignals(P,i,x){const s=[];if(i<210)return s;const up=x.c>P.e200[i]&&P.e50[i]>P.e200[i],dn=x.c<P.e200[i]&&P.e50[i]<P.e200[i],vol=x.v>1.2*P.av20[i];
+  if(up&&Math.min(P.h[i].l,P.h[i-1].l,P.h[i-2].l)<=P.e50[i]*1.002&&x.c>P.e21[i]&&x.c>x.o&&P.r14[i]<70)s.push(['pL',1]);
+  if(dn&&Math.max(P.h[i].h,P.h[i-1].h,P.h[i-2].h)>=P.e50[i]*0.998&&x.c<P.e21[i]&&x.c<x.o&&P.r14[i]>30)s.push(['pS',-1]);
+  if(x.c>P.hi30[i]&&P.e21[i]>P.e50[i]&&vol)s.push(['bL',1]);if(x.c<P.lo30[i]&&P.e21[i]<P.e50[i]&&vol)s.push(['bS',-1]);return s}
+function relearn(){ // komplettes Neulernen aus allen bereits geschlossenen Kerzen (dauert Millisekunden)
+  const P={},D={};for(const c of COINS){const cs=closed(M[c].h4);if(cs.length<260)return null;P[c]=lPrep(cs);const d=closed(M[c].d1),dc=d.map(x=>x.c);
+    D[c]={d,iD:new Map(d.map((x,i)=>[x.t,i])),r2:rsiA(dc,2),s200:dc.map((x,i)=>sma(dc,200,i)),s5:dc.map((x,i)=>sma(dc,5,i)),tsm:dc.map((x,i)=>{let w=0;for(const k of [10,20,30,60,90])if(i>=k&&x>dc[i-k])w++;return w/5})}}
+  const B=D.BTC,bullAt=t=>{const j=B.iD.get(Math.floor(t/864e5)*864e5-864e5);return j!=null&&j>=200&&B.d[j].c>B.s200[j]};
+  LRN={st:{},sh:{},bS:{},b:{n:0,s:0},cS:[],cT:{},P,D,bullAt};const tl=P.BTC.h.map(x=>x.t).slice(260);LRN.t0=tl[0];
+  for(const T of tl){const end=T+4*3600e3,bull=bullAt(end);
+    for(const c of COINS){const Q=P[c],i=Q.i4.get(T);if(i==null)continue;const x=Q.h[i];
+      for(const ty in LT){const k=c+ty,s=LRN.sh[k];if(!s)continue;const sd=s.sd;let ex=null;if(sd>0?x.l<=s.sl:x.h>=s.sl)ex=sd>0?Math.min(x.o,s.sl):Math.max(x.o,s.sl);
+        if(ex!=null){const r=sd*(ex-s.mid)/s.R-2*(FFEE+SLIP)*s.mid/s.R;Ladd('ALL',r);Ladd('T:'+ty,r);for(const f of s.fs)Ladd(f,r);LRN.sh[k]=null;continue}
+        s.best=sd>0?Math.max(s.best,x.h):Math.min(s.best,x.l);if(sd*(s.best-s.mid)>=s.R)s.be=true;const tr=s.best-sd*3*Q.atr[i];if(s.be&&sd*(tr-s.sl)>0)s.sl=tr}
+      for(const [ty,sd] of lSignals(Q,i,x)){const k=c+ty;if(!LRN.sh[k]){const R2=2*Q.atr[i];LRN.sh[k]={sd,mid:x.c,sl:x.c-sd*R2,R:R2,best:x.c,be:false,fs:lFeats(Q,i,x,sd,bull)}}}
+      if(end%864e5===0){const Dc=D[c],j=Dc.iD.get(end-864e5);if(j==null||j<1)continue;const d=Dc.d[j],sb=LRN.bS[c];
+        if(sb&&d.c>Dc.s5[j]){LRN.b.n++;LRN.b.s+=d.c/sb-1-2*(FEE+SLIP);LRN.bS[c]=null}else if(!sb&&d.c>Dc.s200[j]&&Dc.r2[j]<10)LRN.bS[c]=d.c;
+        const prev=LRN.cT[c]||0;LRN.cS.push([end,prev*(d.c/Dc.d[j-1].c-1)/6]);LRN.cT[c]=bull?Dc.tsm[j]:0;while(LRN.cS.length&&LRN.cS[0][0]<end-180*864e5)LRN.cS.shift()}}}
+  LRN.at=P.BTC.h[P.BTC.h.length-1].t;return LRN}
+const learnOn=()=>S.settings.mode!=='fix';
+function ensureLearn(){const L=closed(M.BTC.h4);if(!L.length)return null;const t=L[L.length-1].t;if(!LRN||LRN.at!==t){relearn();if(LRN)log('i',`Gelernt aus ${Ln('ALL')} Schatten-Trades (nur Vergangenheit)`)}return LRN}
+
+/* ---------- Handel ---------- */
+function eqOf(a,c){if(!a.pos)return a.cash;const p=a.pos,pr=M[c].price||p.mid;
+  if(p.kind==='spot')return a.cash+p.qty*pr*(1-SLIP)*(1-FEE);
+  const ex=pr*(1-p.side*SLIP);return a.cash+Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
+function total(){let s=0;for(const k in SLV)for(const c of COINS)s+=eqOf(S.acc[k][c],c);return s}
+function brakeOn(){return (S.peak-total())/S.peak*100>S.settings.brake}
+function addEv(o){(S.ev=S.ev||[]).push({t:now(),...o});if(S.ev.length>800)S.ev.splice(0,S.ev.length-800)}
+function closePos(k,c,reason){const a=S.acc[k][c],p=a.pos;if(!p)return;const before=eqOf(a,c);addEv({c,k,io:'out',side:p.side,px:M[c].price,pnl:before-p.cap0,why:reason});a.cash=before;a.pos=null;const pnl=before-p.cap0;
+  S.closed.unshift({k,c,side:p.side,reason,pnl,t:now()});if(S.closed.length>300)S.closed.length=300;
+  if(k==='A'&&pnl<0)S.cool[c]=now()+3*4*3600e3;log(pnl>=0?'b':'k',`${SLV[k].n} · ${c} ${reason} · ${pnl>=0?'+':''}${eur(pnl)}`)}
+function openSpot(k,c,frac,why){const a=S.acc[k][c],pr=M[c].price,size=a.cash*frac;if(size<1)return;
+  const q=size*(1-FEE)/(pr*(1+SLIP));a.pos={kind:'spot',side:1,qty:q,mid:pr,cap0:a.cash,t:now()};a.cash-=size;addEv({c,k,io:'in',side:1,px:pr,why,amt:size});log('b',`${SLV[k].n} · ${c} KAUF @ ${px(pr)} · ${eur(size)} · ${why}`)}
+function tick(c){if(CLOUDMODE)return; // Stops von A sekündlich prüfen
+  const a=S.acc.A[c],p=a.pos;if(!p)return;const pr=M[c].price,sd=p.side;p.best=sd>0?Math.max(p.best,pr):Math.min(p.best,pr);
+  if(sd*(pr-p.sl)<=0)closePos('A',c,p.trail?'Trailing-Stop':'Stop-Loss')}
+function process(c){if(CLOUDMODE)return;
+  const key4=c+'4',keyD=c+'D',h4=closed(M[c].h4),d1=closed(M[c].d1);if(h4.length<210||d1.length<210)return;
+  const L4=h4[h4.length-1].t,LD=d1[d1.length-1].t;
+  if(S.done[key4]!==L4){S.done[key4]=L4;stepA(c,h4)}
+  if(S.done[keyD]!==LD){S.done[keyD]=LD;stepB(c,d1);stepC(c,d1)}
+  dirty=true;save()}
+function stepA(c,cs){
+  const a=S.acc.A[c],cl=cs.map(x=>x.c),n=cl.length-1,e21=ema(cl,21),e50=ema(cl,50),e200=ema(cl,200),atr=atrA(cs)[n],r=rsiA(cl,14)[n],x=cs[n];
+  if(a.pos){const p=a.pos,sd=p.side;if(p.kind==='lev'){p.fund+=sd>0?p.qty*x.c*FUND*0.5:0;
+      if(sd*(p.best-p.mid)>=p.R)p.be=true;const t=p.best-sd*3*atr;if(p.be&&sd*(t-p.sl)>0){p.sl=t;if(!p.trail)log('i',`A · ${c}: +1R – Trailing-Stop läuft (${px(t)})`);p.trail=true}
+      const ad=p.adds||0;if(S.settings.pyr!==false&&ad<(S.settings.adds||2)&&sd*(x.c-p.mid)>=(ad+1)*p.R){const q0=p.q0||p.qty,eqA=eqOf(a,c),maxN=eqA*5*0.95,addN=Math.min(0.5*q0*x.c,maxN-p.qty*x.c),mg=addN/5;
+        if(addN>0&&mg>=1&&a.cash>=mg+addN*FFEE){const f=x.c*(1+sd*SLIP),aq=addN/f;p.q0=q0;p.entry=(p.entry*p.qty+f*aq)/(p.qty+aq);p.qty+=aq;p.margin+=mg;a.cash-=mg+addN*FFEE;p.adds=ad+1;p.nk=(p.nk||0)+1;p.lev=p.qty*x.c/eqOf(a,c);addEv({c,k:'A',io:'add',side:sd,px:x.c,why:'Nachkauf '+(ad+1),amt:mg});
+          log('b',`A · ${c} Nachkauf ${ad+1} @ ${px(x.c)} · +${ad+1}R im Plus · ${eur(addN)} dazu, Stop bleibt gemeinsam`)}else p.adds=99}}return}
+  if((S.cool[c]||0)>now())return;
+  if(learnOn()){if(!ensureLearn())return;const P=LRN.P[c],i=P.i4.get(x.t);if(i==null)return;const bull=LRN.bullAt(x.t+4*3600e3);let best=null;
+    for(const [ty,sd] of lSignals(P,i,x)){const fs=lFeats(P,i,x,sd,bull),e=lPredict(ty,fs);if(Ln('T:'+ty)>=15&&(!best||e>best.e))best={ty,sd,e}}
+    if(!best)return;if(best.e<0.1){log('i',`A · ${c}: Signal ${LT[best.ty]} ignoriert – gelernter Vorteil nur ${best.e.toFixed(2).replace('.',',')}R`);return}
+    const sd=best.sd,rp=Math.min(6,Math.max(0.5,best.e*5))*(+S.settings.lvl||1),cap=5,pr=M[c].price||x.c,stop=2*P.atr[i],eq=a.cash,risk=eq*rp/100*(brakeOn()?0.5:1);
+    let notional=Math.min(risk/(stop/pr+2*FFEE+2*SLIP),eq*cap*0.95);const margin=notional/cap;if(margin<1)return;const fill=pr*(1+sd*SLIP);
+    a.pos={kind:'lev',side:sd,qty:notional/fill,margin,lev:notional/eq,entry:fill,mid:pr,sl:pr-sd*stop,R:stop,best:pr,be:false,trail:false,fund:0,cap0:a.cash,t:now()};a.cash-=margin+notional*FFEE;
+    log('b',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(pr)} (${LT[best.ty]}) · gelernter Vorteil +${best.e.toFixed(2).replace('.',',')}R → Hebel ${(notional/eq).toFixed(1)}x · Stop ${px(pr-sd*stop)}`);return}
+  const up=x.c>e200[n]&&e50[n]>e200[n],dn=x.c<e200[n]&&e50[n]<e200[n];let sd=0;
+  if(up&&Math.min(cs[n].l,cs[n-1].l,cs[n-2].l)<=e50[n]*1.002&&x.c>e21[n]&&x.c>x.o&&r<70)sd=1;
+  else if(dn&&Math.max(cs[n].h,cs[n-1].h,cs[n-2].h)>=e50[n]*0.998&&x.c<e21[n]&&x.c<x.o&&r>30)sd=-1;
+  const ax=adxA(cs)[n],bp=bwPct(cl,n);
+  if(sd&&ax>=30){log('i',`A · ${c}: Rücksetzer-Signal verworfen – Trend überhitzt (ADX ${ax.toFixed(0)})`);sd=0}
+  else if(sd&&bp<0.4){log('i',`A · ${c}: Rücksetzer-Signal verworfen – Markt zu eng (Bandbreite ${Math.round(bp*100)} %)`);sd=0}
+  let why=sd>0?'Rücksetzer im Aufwärtstrend':'Rücksetzer im Abwärtstrend';
+  if(!sd){let hi=-Infinity,vs=0;for(let j=n-30;j<n;j++)hi=Math.max(hi,cs[j].h);for(let j=n-20;j<n;j++)vs+=cs[j].v;
+    if(x.c>hi&&e21[n]>e50[n]&&x.v>1.2*vs/20){sd=1;why='Wende-Ausbruch über 30-Kerzen-Hoch'}}
+  if(!sd)return;
+  // (Filter oben angewendet): kein Einstieg bei überhitztem Trend (ADX ≥ 30) oder engem Markt (Bandbreite unter 40 % der letzten 120 Kerzen)
+  let v20=0;for(let j=n-20;j<n;j++)v20+=cs[j].v;v20/=20;
+  const sc=(bp>0.62?1:0)+(x.v>1.96*v20?1:0)+(atr/x.c*100<1.73?1:0),auto=S.settings.autoLev!==false,rp=(auto?[1,2.5,4,6][sc]:S.settings.riskA)*(+S.settings.lvl||1),cap=auto?5:2;
+  const pr=M[c].price||x.c,stop=2*atr,eq=a.cash,risk=eq*rp/100*(brakeOn()?0.5:1);
+  let notional=Math.min(risk/(stop/pr+2*FFEE+2*SLIP),eq*cap*0.95);const margin=notional/cap;if(margin<1)return;
+  const fill=pr*(1+sd*SLIP);a.pos={kind:'lev',side:sd,qty:notional/fill,margin,lev:notional/eq,sc,entry:fill,mid:pr,sl:pr-sd*stop,R:stop,best:pr,be:false,trail:false,fund:0,cap0:a.cash,t:now()};
+  a.cash-=margin+notional*FFEE;addEv({c,k:'A',io:'in',side:sd,px:pr,lev:notional/eq,why,amt:margin});log('b',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(pr)} · ${auto?`Sicherheit ${sc}/3 → Hebel ${(notional/eq).toFixed(1)}x · `:''}Position ${eur(notional)} · Stop ${px(pr-sd*stop)} (${why})`)}
+function stepB(c,cs){
+  const a=S.acc.B[c],cl=cs.map(x=>x.c),n=cl.length-1,r2=rsiA(cl,2)[n],s200=sma(cl,200,n),s5=sma(cl,5,n);
+  if(a.pos){if(cl[n]>s5)closePos('B',c,'Schluss über 5-Tage-Schnitt');return}
+  if(learnOn()){if(!ensureLearn()||!(LRN.b.n>=8&&LRN.b.s>0))return}
+  if(cl[n]>s200&&r2<10)openSpot('B',c,brakeOn()?0.5:1,`RSI(2) ${r2.toFixed(1)} im Aufwärtstrend`)}
+function tsmomW(cl){const n=cl.length-1;let w=0;for(const k of [10,20,30,60,90])if(cl[n]>cl[n-k])w++;return w/5}
+function stepC(c,cs){
+  const a=S.acc.C[c],cl=cs.map(x=>x.c),rg=regime();if(!rg)return;
+  let target=rg.bull?tsmomW(cl):0;if(learnOn()&&ensureLearn()&&LRN.cS.reduce((s,v)=>s+v[1],0)<=0)target=0;if(brakeOn())target*=0.5;
+  const pr=M[c].price||cl[cl.length-1],eq=eqOf(a,c),cur=a.pos?a.pos.qty*pr/eq:0;
+  if(Math.abs(target-cur)<0.05)return;
+  // umschichten: erst alles verkaufen, dann Zielanteil kaufen (vereinfacht, Gebühr nur auf Differenz)
+  const diff=(target-cur)*eq,fee=Math.abs(diff)*(FEE+SLIP);
+  const qty=target*eq/pr;const cap0=a.pos?a.pos.cap0:eq;
+  if(target===0){closePos('C',c,rg.bull?'Momentum weg':'Bärenmodus – raus');return}
+  if(target>cur)addEv({c,k:'C',io:'in',side:1,px:pr,why:`Momentum ${Math.round(target*100)} %`,amt:diff});
+  a.cash=eq-target*eq-fee;a.pos={kind:'spot',side:1,qty:qty,mid:a.pos?a.pos.mid:pr,cap0,t:a.pos?a.pos.t:now()};
+  log('i',`C · ${c}: Anteil ${Math.round(cur*100)} % → ${Math.round(target*100)} %${rg.bull?'':' (Bärenmodus)'}`)}
+
+/* ---------- Anzeige ---------- */
+let dirty=true;const BT=JSON.parse($('btData').textContent);
+function renderConn(){const m={live:['ok','Live'],connecting:['wait','Verbinde…'],poll:['wait','Notbetrieb'],err:['err','Getrennt'],off:['','Getrennt']}[wsState];$('wsDot').className='dot '+m[0];$('wsTxt').textContent=m[1]}
+let cCoin='BTC',cTf='4h';
+function drawCand(){const cv=$('cand'),W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W)return;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.fillStyle='#000';g.fillRect(0,0,W,H);
+  const all=cTf==='4h'?M[cCoin].h4:M[cCoin].d1;$('chT').textContent=`${cCoin}/USDT · ${M[cCoin].price?px(M[cCoin].price):''}`;$('chS').textContent=cTf==='4h'?'4-Stunden-Kerzen':'Tageskerzen';
+  if(!all||all.length<5){g.fillStyle='#8a8a8a';g.font='13px Inter,sans-serif';g.fillText('Lädt Kerzen… (auf Start tippen)',12,24);return}
+  const N=W<520?60:110,cs=all.slice(-N),R=62,cw=(W-R)/N,step=cTf==='4h'?4*3600e3:864e5,t0=cs[0].t;
+  const cl=all.map(x=>x.c),e50=ema(cl,50).slice(-N),e200=all.length>200?ema(cl,200).slice(-N):null;
+  const ov=[];for(const k of ['A','B','C']){const p=S.acc[k][cCoin].pos;if(!p)continue;ov.push({y:p.entry||p.mid,c:'#e5e5e5',l:`${k} Einstieg`});if(p.sl)ov.push({y:p.sl,c:'#ef4444',l:p.trail?'Trailing-Stop':'Stop'})}
+  let lo=Math.min(...cs.map(x=>x.l)),hi=Math.max(...cs.map(x=>x.h));for(const o of ov)if(o.y>lo-(hi-lo)*.4&&o.y<hi+(hi-lo)*.4){lo=Math.min(lo,o.y);hi=Math.max(hi,o.y)}
+  const pad=(hi-lo)*.06;lo-=pad;hi+=pad;const y=v=>8+(hi-v)/(hi-lo)*(H-26);g.font='10px Inter,sans-serif';
+  for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5;g.strokeStyle='#161616';g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle='#6b6b6b';g.fillText(px(v),W-R+5,y(v)+3)}
+  for(const o of ov){if(o.y<lo||o.y>hi)continue;g.strokeStyle=o.c;g.setLineDash([5,4]);g.beginPath();g.moveTo(0,y(o.y));g.lineTo(W-R,y(o.y));g.stroke();g.setLineDash([]);g.fillStyle=o.c;g.fillText(o.l,4,y(o.y)-3)}
+  cs.forEach((x,i)=>{const up=x.c>=x.o,cx=i*cw+cw/2;g.strokeStyle=g.fillStyle=up?'#22c55e':'#ef4444';g.beginPath();g.moveTo(cx,y(x.h));g.lineTo(cx,y(x.l));g.stroke();g.fillRect(cx-Math.max(1,cw*.34),y(Math.max(x.o,x.c)),Math.max(2,cw*.68),Math.max(1,Math.abs(y(x.o)-y(x.c))))});
+  for(const [a,c] of [[e50,'#facc15'],[e200,'#ffffff55']]){if(!a)continue;g.strokeStyle=c;g.lineWidth=1.3;g.beginPath();a.forEach((v,i)=>{const X=i*cw+cw/2;i?g.lineTo(X,y(v)):g.moveTo(X,y(v))});g.stroke();g.lineWidth=1}
+  for(const e of (S.ev||[]).filter(e=>e.c===cCoin)){if(e.t<t0)continue;const i=Math.min(N-1,Math.floor((e.t-t0)/step)),X=i*cw+cw/2,Y=y(e.px);if(Y<0||Y>H)continue;
+    if(e.io==='out'){g.fillStyle=e.pnl>=0?'#22c55e':'#ef4444';g.beginPath();g.arc(X,Y,4,0,7);g.fill();g.strokeStyle='#000';g.stroke()}
+    else if(e.io==='add'){g.fillStyle='#facc15';g.beginPath();g.moveTo(X,Y-6);g.lineTo(X+5,Y);g.lineTo(X,Y+6);g.lineTo(X-5,Y);g.fill()}
+    else{g.fillStyle=e.side>0?'#22c55e':'#ef4444';g.beginPath();if(e.side>0){g.moveTo(X,Y+3);g.lineTo(X-6,Y+13);g.lineTo(X+6,Y+13)}else{g.moveTo(X,Y-3);g.lineTo(X-6,Y-13);g.lineTo(X+6,Y-13)}g.fill();
+      if(e.lev){g.fillStyle='#fff';g.font='bold 10px Inter,sans-serif';g.fillText(e.lev.toFixed(1)+'x',X+7,e.side>0?Y+14:Y-6);g.font='10px Inter,sans-serif'}}}
+  const lp=M[cCoin].price;if(lp>lo&&lp<hi){g.fillStyle='#22c55e';g.fillRect(W-R,y(lp)-8,R,16);g.fillStyle='#000';g.fillText(px(lp),W-R+5,y(lp)+3)}}
+function renderOv(){const rows=[];let margin=0,expo=0;const tot=total();
+  for(const k of ['A','B','C'])for(const c of COINS){const a=S.acc[k][c],p=a.pos;if(!p)continue;const pr=M[c].price||p.mid,val=eqOf(a,c)-a.cash,notional=p.qty*pr,own=p.kind==='lev'?p.margin:notional,lev=p.kind==='lev'?notional/Math.max(1e-9,eqOf(a,c)):notional/Math.max(1e-9,eqOf(a,c)),res=eqOf(a,c)-p.cap0;
+    margin+=own;expo+=notional;rows.push(`<tr><td><b>${c}</b></td><td>${SLV[k].n.split(' · ')[1]||k}</td><td class="${p.side>0?'up':'down'}">${p.side>0?'Long':'Short'}${p.nk?` +${p.nk} Nachkauf`:''}</td><td class="n"><span class="lev${p.side<0?' s':''}">${lev.toFixed(1)}x</span></td><td class="n">${eur(own)}</td><td class="n">${eur(notional)}</td><td class="n">${px(p.entry||p.mid)}</td><td class="n">${p.sl?px(p.sl):'–'}</td><td class="n ${res>=0?'up':'down'}">${res>=0?'+':''}${eur(res)}</td></tr>`)}
+  $('ovBody').innerHTML=rows.join('');$('ovEmpty').style.display=rows.length?'none':'';
+  $('ovKpi').innerHTML=`<div>Konto gesamt<b>${eur(tot)}</b></div><div>Davon eingesetzt<b>${eur(margin)}</b></div><div>Positionen insgesamt<b>${eur(expo)}</b></div><div>Gesamthebel<b>${(expo/Math.max(1,tot)).toFixed(2).replace('.',',')}x</b></div>`;
+  $('ovInfo').textContent=rows.length?`${rows.length} offen`:'';
+  $('cTabs').innerHTML=COINS.map(c=>`<button type="button" data-c="${c}" class="${c===cCoin?'on':''}">${c}</button>`).join('');
+  $('tTabs').innerHTML=[['4h','4h'],['1d','Tag']].map(([v,l])=>`<button type="button" data-t="${v}" class="${v===cTf?'on':''}">${l}</button>`).join('')}
+document.addEventListener('click',e=>{const b=e.target.closest('#cTabs [data-c]');if(b){cCoin=b.dataset.c;dirty=true}const t=e.target.closest('#tTabs [data-t]');if(t){cTf=t.dataset.t;dirty=true}});
+function render(){
+  const tot=total(),pnl=tot-S.start,m=tot/S.start;S.peak=Math.max(S.peak,tot);
+  const [a,b]=eur(tot).split(',');$('eq').innerHTML=esc(a)+'<small>,'+esc(b)+'</small>';
+  $('eqSub').textContent=`Gesamtkonto · Start ${eur(S.start)} · Paper`;
+  $('pnl').textContent=`${pnl>=0?'+':''}${eur(pnl)} (${pct(pnl/S.start*100,2)})`;$('pnl').className='pnl '+(pnl>=0?'up':'down');
+  $('mult').textContent=m.toLocaleString('de-DE',{minimumFractionDigits:3,maximumFractionDigits:3})+'×';$('mult').className='mult'+(m<1?' neg':'');
+  const rg=regime();$('reg').className='reg '+(rg?(rg.bull?'bull':'bear'):'');$('reg').textContent=rg?(rg.bull?`Bullenmodus · BTC über der 200-Tage-Linie (${px(rg.s)}) · Momentum C aktiv`:`Bärenmodus · BTC unter der 200-Tage-Linie (${px(rg.s)}) · Momentum C aus, Trendfolge darf shorten`):'Marktphase wird ermittelt…';
+  const dd=(S.peak-tot)/S.peak*100;$('brakeTxt').innerHTML=`Abstand zum Hoch: <b>${dd.toFixed(1).replace('.',',')} %</b> · Notbremse bei ${S.settings.brake} %${brakeOn()?' · <b class="down">aktiv – neue Positionen halbiert</b>':''}`;
+  $('sleeves').innerHTML=Object.entries(SLV).map(([k,s])=>{let e=0,st=0,open=[];for(const c of COINS){const ac=S.acc[k][c];e+=eqOf(ac,c);st+=S.start*s.w/COINS.length;if(ac.pos)open.push(c+(ac.pos.side<0?' Short':k==='C'?` ${Math.round(ac.pos.qty*M[c].price/eqOf(ac,c)*100)} %`:' Long'))}
+    const r=(e/st-1)*100;return `<div class="card"><h2><span><span class="tag" style="background:${s.c}">${k}</span>${s.n.slice(4)}</span><span>${Math.round(s.w*100)} %</span></h2><div class="v">${eur(e,0)}</div><div class="${r>=0?'up':'down'}">${pct(r,2)}</div><div class="sub" style="margin-top:6px">${open.length?'Offen: '+esc(open.join(', ')):'keine Position'}</div></div>`}).join('');
+  $('coinBody').innerHTML=COINS.map(c=>{const A=S.acc.A[c].pos,B=S.acc.B[c].pos,C=S.acc.C[c].pos,pr=M[c].price;
+    const aT=A?`<span class="${A.side>0?'up':'down'}">${A.side>0?'Long':'Short'}${A.lev?' '+A.lev.toFixed(1)+'x':''}</span> ${pct((eqOf(S.acc.A[c],c)/A.cap0-1)*100)}`:'<span class="mute">wartet</span>';
+    const d1=closed(M[c].d1),cl=d1.map(x=>x.c),rv=cl.length>10?rsiA(cl,2)[cl.length-1]:null;
+    const bT=B?`<span class="up">gehalten</span> ${pct((eqOf(S.acc.B[c],c)/B.cap0-1)*100)}`:`<span class="mute">RSI(2) ${rv==null?'–':rv.toFixed(0)}</span>`;
+    const cT=C?Math.round(C.qty*pr/eqOf(S.acc.C[c],c)*100)+' %':'0 %';
+    return `<tr><td><b>${c}</b></td><td class="n">${pr?px(pr):'–'}</td><td>${aT}</td><td>${bT}</td><td class="n">${cT}</td></tr>`}).join('');
+  $('feed').innerHTML=S.logs.slice(0,40).map((l,i)=>`<div class="${l.cls}${i===0?' new':''}">${hhmm(l.t)} ${esc(l.msg)}</div>`).join('')||'<div class="i">Drück auf Start.</div>';
+  const cl=S.closed;$('histBody').innerHTML=cl.slice(0,50).map(t=>`<tr><td>${t.c}</td><td>${t.k}${t.side<0?' Short':''}</td><td>${esc(t.reason)}</td><td class="n ${t.pnl>=0?'up':'down'}">${t.pnl>=0?'+':''}${eur(t.pnl)}</td></tr>`).join('');
+  $('histEmpty').style.display=cl.length?'none':'';$('histInfo').textContent=cl.length?`${cl.length} · Treffer ${Math.round(cl.filter(x=>x.pnl>0).length/cl.length*100)} %`:'';
+  $('cdTxt').textContent=S.running?(wsState==='live'?'live':'verbinde…'):'pausiert';
+  if(learnOn()&&LRN){$('lnCard').style.display='';const rows=Object.entries(LT).map(([k,l])=>{const o=LRN.st['T:'+k];return `<tr><td>${l}</td><td class="n">${o?o.n:0}</td><td class="n ${o&&o.s>=0?'up':'down'}">${o?(o.s/o.n>=0?'+':'')+(o.s/o.n).toFixed(2).replace('.',',')+'R':'–'}</td></tr>`}).join('');
+    $('lnBody').innerHTML=rows+`<tr><td>B · RSI-2-Dips</td><td class="n">${LRN.b.n}</td><td class="n ${LRN.b.s>=0?'up':'down'}">${LRN.b.n?pct(LRN.b.s/LRN.b.n*100,2):'–'}</td></tr>`;
+    const f=Object.keys(LRN.st).filter(k=>!k.startsWith('T:')&&k!=='ALL').map(k=>({l:k,n:LRN.st[k].n,d:Lm(k)-Lm('ALL')})).sort((a,b)=>b.d-a.d);
+    const fm=a=>a.map(x=>`${esc(x.l)} <b class="${x.d>=0?'up':'down'}">${x.d>=0?'+':''}${x.d.toFixed(2).replace('.',',')}R</b> <span class="mute">(${x.n}×)</span>`).join('<br>')||'noch zu wenig Daten';
+    $('lnGood').innerHTML=fm(f.filter(x=>x.d>0.02).slice(0,5));$('lnBad').innerHTML=fm(f.filter(x=>x.d<-0.02).slice(-5).reverse());$('lnInfo').textContent=`${Ln('ALL')} Schatten-Trades`}else $('lnCard').style.display='none';
+  drawEq();drawBT();renderOv();drawCand()}
+function canv(cv){const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W)return null;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);return{g,W,H}}
+function drawEq(){const o=canv($('chart'));if(!o)return;const {g,W,H}=o,pts=S.equity.length?S.equity:[[now(),S.start]],v=pts.map(p=>p[1]),st=S.start;
+  let lo=Math.min(st,...v),hi=Math.max(st,...v);if(hi-lo<st*0.004){hi+=st*0.002;lo-=st*0.002}const x=i=>pts.length<2?W:i/(pts.length-1)*(W-6),y=q=>H-6-(q-lo)/(hi-lo)*(H-12);
+  g.strokeStyle='#1c2e25';g.setLineDash([4,4]);g.beginPath();g.moveTo(0,y(st));g.lineTo(W,y(st));g.stroke();g.setLineDash([]);
+  const up=v[v.length-1]>=st;g.strokeStyle=up?'#3ee08f':'#ff5d5d';g.lineWidth=2;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(x(i),y(p[1])):g.moveTo(x(i),y(p[1])));g.stroke()}
+function drawBT(){const o=canv($('btc'));if(!o)return;const {g,W,H}=o,R=48;const ser=[['bh','#e8f3ec55',1.2],['A','#5aa8ff',1],['B','#f2c14e',1],['C','#a98bff',1],['meta','#3ee08f',2.6]];
+  let lo=Infinity,hi=-Infinity;for(const [k] of ser)for(const v of BT[k]){lo=Math.min(lo,v);hi=Math.max(hi,v)}
+  const n=BT.d.length,x=i=>i/(n-1)*(W-R),ly=v=>Math.log(v),y=v=>H-14-(ly(v)-ly(lo))/(ly(hi)-ly(lo))*(H-22);
+  g.font='10px Inter,sans-serif';g.fillStyle='#7f978a';for(const v of [500,1000,2000,3000]){if(v<lo||v>hi)continue;g.strokeStyle='#14241c';g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillText((v/1000).toLocaleString('de-DE')+'×',W-R+4,y(v)+3)}
+  for(const [k,c,lw] of ser){g.strokeStyle=c;g.lineWidth=lw;g.beginPath();BT[k].forEach((v,i)=>i?g.lineTo(x(i),y(v)):g.moveTo(0,y(v)));g.stroke()}g.lineWidth=1;
+  const yr=t=>new Date(t).toLocaleDateString('de-DE',{month:'short',year:'2-digit'});g.fillStyle='#7f978a';g.fillText(yr(BT.d[0]),2,H-2);const e=yr(BT.d[n-1]);g.fillText(e,W-R-g.measureText(e).width,H-2)}
+new ResizeObserver(()=>{dirty=true}).observe(document.body);
+
+/* ---------- Bedienung ---------- */
+function renderSettings(){const s=S.settings;$('setForm').innerHTML=`<label>Startkapital (€)<input id="f_cap" type="number" inputmode="decimal" value="${esc(s.capital)}"></label><label>Modus<select id="f_mode"><option value="learn"${s.mode!=='fix'?' selected':''}>Selbstlernend (ohne Vorwissen)</option><option value="fix"${s.mode==='fix'?' selected':''}>Feste Regeln (mit Vorwissen)</option></select></label><label>Nachkaufen<select id="f_pyr"><option value="1"${s.pyr!==false?' selected':''}>An – bei +1R und +2R</option><option value="0"${s.pyr===false?' selected':''}>Aus</option></select></label><label>Risikostufe<select id="f_lvl">${[[1,'Normal (×1)'],[1.5,'Erhöht (×1,5)'],[2,'Aggressiv (×2)'],[3,'Hoch (×3)'],[4,'Maximum (×4)']].map(([v,l])=>`<option value="${v}"${+s.lvl===v?' selected':''}>${l}</option>`).join('')}</select></label><label>Hebel-Automatik<select id="f_auto"><option value="1"${s.autoLev!==false?' selected':''}>An – Hebel nach Sicherheit</option><option value="0"${s.autoLev===false?' selected':''}>Aus – festes Risiko</option></select></label><label>Festes Risiko, wenn Automatik aus (%)<input id="f_risk" type="number" inputmode="decimal" step="0.5" value="${esc(s.riskA)}"></label><label>Notbremse ab Rückgang (%)<input id="f_brake" type="number" inputmode="decimal" value="${esc(s.brake)}"></label>`}
+$('saveBtn').onclick=()=>{const s=S.settings,v=id=>+$(id).value;if(v('f_cap')>0)s.capital=v('f_cap');if(v('f_risk')>0&&v('f_risk')<=5)s.riskA=v('f_risk');if(v('f_brake')>0)s.brake=v('f_brake');s.autoLev=$('f_auto').value==='1';s.lvl=+$('f_lvl').value;s.pyr=$('f_pyr').value==='1';s.mode=$('f_mode').value;LRN=null;
+  if(!S.closed.length&&!COINS.some(c=>Object.keys(SLV).some(k=>S.acc[k][c].pos))){const r=S.eurRate;S.acc=newAcc(s.capital,r);S.start=S.peak=s.capital/r;S.equity=[]}log('i','Einstellungen gespeichert');save()};
+$('resetBtn').onclick=()=>$('modal').classList.add('on');$('resetBtn2').onclick=()=>$('modal').classList.add('on');$('mNo').onclick=()=>$('modal').classList.remove('on');
+$('mYes').onclick=()=>{const st=S.settings,r=S.eurRate,run=S.running;S=fresh(st);S.eurRate=r;S.acc=newAcc(st.capital,r);S.start=S.peak=st.capital/r;S.running=run;$('modal').classList.remove('on');save();dirty=true};
+let started=false;
+async function start(){if(started)return;started=true;log('i','Lade Kerzen (4 h und Tag) für 6 Coins…');const n=await history();log(n?'b':'k',n?`Historie geladen für ${n}/6 Coins – prüfe die letzten Kerzen`:'Binance nicht erreichbar – versuche Live-Verbindung');
+  if(!S.equity.length&&!S.closed.length&&!COINS.some(c=>Object.keys(SLV).some(k=>S.acc[k][c].pos))){const r=S.eurRate;S.acc=newAcc(S.settings.capital,r);S.start=S.peak=S.settings.capital/r}
+  for(const c of COINS)process(c);connect();setInterval(poll,10000);setInterval(()=>{if(wsState==='live'&&now()-lastMsg>30000)connect()},15000)}
+function setRun(v){S.running=v;if(v){log('b','Max-Bot gestartet');start()}else log('i','Pausiert – offene Positionen bleiben stehen');$('runBtn').textContent=v?'Pause':'Start';$('runBtn').className='btn '+(v?'stop':'go');save();dirty=true}
+$('runBtn').onclick=()=>setRun(!S.running);
+let lock=null;$('wakeBtn').onclick=async()=>{try{if(lock){await lock.release();lock=null}else{lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>{lock=null;$('wakeBtn').textContent='Bildschirm wach: aus'})}$('wakeBtn').textContent='Bildschirm wach: '+(lock?'an':'aus')}catch(e){$('wakeBtn').textContent='Wach halten nicht möglich'}};
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.running){if(wsState!=='live')connect();history().then(()=>{for(const c of COINS)process(c)})}});
+let sec=0;setInterval(()=>{sec++;if(S.running&&sec%60===0){S.equity.push([now(),total()]);if(S.equity.length>5000)S.equity.splice(0,S.equity.length-5000);save()}if(dirty||sec%2===0){render();dirty=false}},1000);
+$('runBtn').textContent=S.running?'Pause':'Start';$('runBtn').className='btn '+(S.running?'stop':'go');
+renderSettings();renderConn();render();
+/* Cloud: der Bot rechnet auf Cloudflare, diese Seite zeigt nur an */
+let CLOUD=null;const cst=t=>{$('cloudSt').textContent=t};
+async function cloudPull(){try{
+  if(!CLOUD){const r=await fetch('cloud-url.json?'+Date.now(),{cache:'no-store'});if(r.ok)CLOUD=(await r.json()).url}
+  if(!CLOUD){cst('Cloud-Bot ist noch nicht eingerichtet');return}
+  const r=await fetch(CLOUD.replace(/\/$/,'')+'/api/state?'+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;const s=await r.json();
+  if(!s.acc){cst('Cloud-Bot startet – erster Lauf kommt in höchstens 5 Minuten');return}
+  S=s;S.settings={...DEF,...s.settings};S.running=false;
+  const ago=Math.round((Date.now()-s.lastRun)/60000);
+  cst(ago<=10?`☁️ Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`⚠️ Letzter Cloud-Lauf vor ${ago} Min`);dirty=true
+}catch(e){cst('Cloud gerade nicht erreichbar – neuer Versuch…')}}
+$('runBtn').style.display='none';$('resetBtn2').closest('.card').style.display='none';
+cloudPull();setInterval(cloudPull,20000);history().then(()=>{dirty=true});connect();setInterval(poll,10000);
+window.__meta={get S(){return S},M,onData,process,start,setRun,stepA,stepB,tick};
+}
+</script>
+</body>
+</html>

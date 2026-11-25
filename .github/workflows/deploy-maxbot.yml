@@ -1,0 +1,27 @@
+name: Max-Bot auf Cloudflare veröffentlichen
+on:
+  push:
+    branches: [main]
+    paths: ['cloud/**', '.github/workflows/deploy-maxbot.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: wr
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: cloud
+      - name: Adresse für die Seite speichern
+        run: |
+          URL="${{ steps.wr.outputs.deployment-url }}"
+          if [ -z "$URL" ]; then URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' <<< "${{ steps.wr.outputs.command-output }}" | head -1); fi
+          echo "{\"url\":\"$URL\"}" > cloud-url.json
+          cat cloud-url.json
+          git config user.name "maxbot-deploy"; git config user.email "actions@github.com"
+          git add cloud-url.json
+          git diff --cached --quiet || (git commit -m "Cloud-Adresse des Max-Bots" && git push)
