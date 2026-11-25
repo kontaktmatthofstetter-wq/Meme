@@ -91,6 +91,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
 </style>
 <style>
 .ctl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ctl label:nth-child(n+4){grid-column:span 1}
 .ctl label{font-size:12px;color:var(--mute);display:grid;gap:4px}
 .ctl select,.ctl input{min-height:44px;font-size:16px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--ink)}
 @media(max-width:600px){.ctl{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -123,6 +124,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <label>Startkapital (€)<input id="cCap" type="number" inputmode="decimal" value="1000"></label>
     <label>Risiko pro Trend-Trade (%)<input id="cRisk" type="number" inputmode="decimal" step="0.5" value="3"></label>
     <label>Stop-Filter (ADX + Bandbreite)<select id="cFilt"><option value="1" selected>An – neue Version</option><option value="0">Aus – alte Version</option></select></label>
+    <label>Wende-Ausbruch (Long)<select id="cBrk"><option value="1" selected>An – fängt verpasste Rallyes</option><option value="0">Aus</option></select></label>
   </div>
   <div class="row" style="align-items:center">
     <button class="btn go" id="startBtn" type="button">Start</button>
@@ -167,7 +169,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <div class="scroll"><table><thead><tr><th>System · Grund</th><th class="n">Trades</th><th class="n">Summe</th></tr></thead><tbody id="rsBody"></tbody></table></div>
     <div class="empty" id="rsEmpty">Noch nichts.</div></div>
 </div>
-<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Trendfolge mit Stop-Filter: kein Einstieg bei ADX ≥ 30 oder Bollinger-Bandbreite unter 40 % der letzten 120 Kerzen. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
+<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Trendfolge mit Wende-Ausbruch (Long, wenn der Kurs mit Volumen über das 30-Kerzen-Hoch springt und EMA 21 über EMA 50 liegt) und Stop-Filter: kein Einstieg bei ADX ≥ 30 oder Bollinger-Bandbreite unter 40 % der letzten 120 Kerzen. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
 <p class="note"><a href="meta.html">← Live-Meta-Bot</a> · <a href="backtest.html">Backtest Arena</a></p>
 </div>
 
@@ -209,11 +211,11 @@ function prepare(D,days,capEur,risk){
   const start=Date.now()-days*DAY,cap=capEur/RATE,P={};
   for(const c of COINS){const h=D[c].h4,d=D[c].d1,cl=h.map(x=>x.c),dc=d.map(x=>x.c);
     const tsm=dc.map((x,i)=>{let w=0;for(const k of [10,20,30,60,90])if(i>=k&&x>dc[i-k])w++;return w/5});
-    P[c]={h,d,i4:new Map(h.map((x,i)=>[x.t,i])),iD:new Map(d.map((x,i)=>[x.t,i])),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:atrA(h),r14:rsiA(cl,14),adx:adxA(h),bwp:bwpA(cl),r2:rsiA(dc,2),s200:smaA(dc,200),s5:smaA(dc,5),tsm}}
+    P[c]={h,d,i4:new Map(h.map((x,i)=>[x.t,i])),iD:new Map(d.map((x,i)=>[x.t,i])),e21:ema(cl,21),e50:ema(cl,50),e200:ema(cl,200),atr:atrA(h),r14:rsiA(cl,14),adx:adxA(h),bwp:bwpA(cl),hi30:h.map((x,i)=>{let m=-Infinity;for(let j=Math.max(0,i-30);j<i;j++)m=Math.max(m,h[j].h);return m}),av20:h.map((x,i)=>{let s=0;for(let j=Math.max(0,i-20);j<i;j++)s+=h[j].v;return s/Math.max(1,Math.min(20,i))}),r2:rsiA(dc,2),s200:smaA(dc,200),s5:smaA(dc,5),tsm}}
   const tl=P.BTC.h.map(x=>x.t).filter(t=>t>=start);
   const acc={};for(const k in W){acc[k]={};for(const c of COINS)acc[k][c]={cash:cap*W[k]/6,pos:null}}
   const bh0={};for(const c of COINS){const i=P[c].i4.get(tl[0]);bh0[c]=P[c].h[i??0].c}
-  return{P,tl,k:0,acc,cap,risk,ev:[],filt:$('cFilt').value==='1',skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
+  return{P,tl,k:0,acc,cap,risk,ev:[],filt:$('cFilt').value==='1',brk:$('cBrk').value==='1',skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
 function posVal(p,pr){if(p.kind==='spot')return p.qty*pr*(1-SLIP)*(1-FEE);const ex=pr*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
 function aEq(a,pr){return a.cash+(a.pos?posVal(a.pos,pr):0)}
 function total(){let s=0;for(const k in W)for(const c of COINS)s+=aEq(X.acc[k][c],X.price[c]||0);return s}
@@ -235,9 +237,11 @@ function step(){
       if(up&&Math.min(P.h[i].l,P.h[i-1].l,P.h[i-2].l)<=P.e50[i]*1.002&&x.c>P.e21[i]&&x.c>x.o&&P.r14[i]<70)sd=1;
       else if(dn&&Math.max(P.h[i].h,P.h[i-1].h,P.h[i-2].h)>=P.e50[i]*0.998&&x.c<P.e21[i]&&x.c<x.o&&P.r14[i]>30)sd=-1;
       if(sd&&X.filt&&(P.adx[i]>=30||P.bwp[i]<0.4)){X.skipped++;sd=0}
+      let why='Rücksetzer';
+      if(!sd&&X.brk&&x.c>P.hi30[i]&&P.e21[i]>P.e50[i]&&x.v>1.2*P.av20[i]){sd=1;why='Wende-Ausbruch'}
       if(sd){const stop=2*P.atr[i],eq=a.cash,risk=eq*X.risk/100*(brake()?0.5:1);const notional=Math.min(risk/(stop/x.c+2*FFEE+2*SLIP),eq*2*0.95),margin=notional/2;
         if(margin>=1){const f=x.c*(1+sd*SLIP);a.pos={kind:'lev',side:sd,qty:notional/f,margin,entry:f,mid:x.c,sl:x.c-sd*stop,R:stop,best:x.c,be:false,trail:false,fund:0,cap0:a.cash};a.cash-=margin+notional*FFEE;
-          feed(end,'i',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(x.c)}`);X.ev.push({t:end,c,k:'A',io:'in',side:sd,px:x.c})}}}
+          feed(end,'i',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(x.c)} (${why})`);X.ev.push({t:end,c,k:'A',io:'in',side:sd,px:x.c,why})}}}
     // Tagesschluss
     if(end%DAY===0){const j=P.iD.get(end-DAY);if(j==null)continue;if(c==='BTC')lastD=j;const d=P.d[j];
       const b=X.acc.B[c];
@@ -308,7 +312,7 @@ $('coinTabs').addEventListener('click',e=>{const b=e.target.closest('[data-c]');
 $('sysTabs').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b){pcSys=b.dataset.s;tabs();drawPC();$('pcTip').textContent=''}});
 $('pc').addEventListener('click',ev=>{const r=$('pc').getBoundingClientRect(),mx=ev.clientX-r.left,my=ev.clientY-r.top;let best=null,bd=1e9;for(const h of pcHits){const d=(h.X-mx)**2+(h.Y-my)**2;if(d<bd){bd=d;best=h}}
   if(!best||bd>900){$('pcTip').textContent='';return}const e=best.e;
-  $('pcTip').innerHTML=`<b>${dfmt(e.t)}</b> · System ${e.k} · ${e.io==='in'?(e.side>0?'Long-Kauf':'Short-Einstieg')+(e.share!=null?' (Anteil '+Math.round(e.share*100)+' %)':''):'Ausstieg: '+esc(e.why)} @ ${px(e.px)}${e.io==='out'?` · <span class="${e.pnl>=0?'up':'down'}">${e.pnl>=0?'+':''}${eur(e.pnl,2)}</span>`:''}`});
+  $('pcTip').innerHTML=`<b>${dfmt(e.t)}</b> · System ${e.k} · ${e.io==='in'?(e.side>0?'Long-Kauf':'Short-Einstieg')+(e.why?' ('+esc(e.why)+')':'')+(e.share!=null?' (Anteil '+Math.round(e.share*100)+' %)':''):'Ausstieg: '+esc(e.why)} @ ${px(e.px)}${e.io==='out'?` · <span class="${e.pnl>=0?'up':'down'}">${e.pnl>=0?'+':''}${eur(e.pnl,2)}</span>`:''}`});
 tabs();
 
 /* ---------- Ablauf ---------- */
@@ -327,7 +331,7 @@ $('startBtn').onclick=async()=>{const t=$('startBtn').textContent;
   if(t==='Weiter'&&X){running=true;last=0;setBtn('Pause');requestAnimationFrame(loop);return}
   if(await prepareRun()){running=true;last=0;acc=0;setBtn('Pause');requestAnimationFrame(loop)}};
 $('endBtn').onclick=async()=>{const t=$('startBtn').textContent;if(!X||t==='Start'||t==='Nochmal'){if(!(await prepareRun()))return}running=false;while(X.k<X.tl.length)step();setBtn('Nochmal');render()};
-for(const id of ['cPer','cCap','cRisk','cFilt'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
+for(const id of ['cPer','cCap','cRisk','cFilt','cBrk'])$(id).addEventListener('change',()=>{running=false;setBtn('Start')});
 $('spd').innerHTML=[1,2,3,4,5].map(v=>`<button type="button" data-v="${v}">${v}×</button>`).join('');
 const mark=()=>{for(const b of $('spd').children)b.className=+b.dataset.v===speed?'on':''};
 $('spd').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){speed=+b.dataset.v;mark();render()}});
