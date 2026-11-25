@@ -153,6 +153,14 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
   <div class="kpi"><div>Stops Trendfolge<b id="kStop">–</b></div><div>Vom Filter verworfen<b id="kSkip">–</b></div><div></div></div>
 </section>
 
+<div class="card" style="margin-top:12px">
+  <h2>Wo er gekauft und verkauft hat <span id="pcInfo"></span></h2>
+  <div class="row" style="margin-top:0"><div class="spd" id="coinTabs"></div><div class="spd" id="sysTabs"></div></div>
+  <div class="efig" style="height:320px"><canvas id="pc"></canvas></div>
+  <div class="legend"><span style="color:#3ee08f">▲ Long-Kauf</span><span style="color:#ff5d5d">▼ Short-Einstieg</span><span><span style="color:#3ee08f">●</span>/<span style="color:#ff5d5d">●</span> Ausstieg mit Gewinn/Verlust</span><span>Tippe auf den Chart für Details</span></div>
+  <div class="sub" id="pcTip" style="margin-top:8px;min-height:20px"></div>
+</div>
+
 <div class="grid">
   <div class="card"><h2>Trades <span id="trInfo"></span></h2><div class="log feed" id="feed"><div class="i">Hier läuft jeder Trade mit Datum durch.</div></div></div>
   <div class="card"><h2>Woher kommt der Gewinn?</h2>
@@ -205,11 +213,11 @@ function prepare(D,days,capEur,risk){
   const tl=P.BTC.h.map(x=>x.t).filter(t=>t>=start);
   const acc={};for(const k in W){acc[k]={};for(const c of COINS)acc[k][c]={cash:cap*W[k]/6,pos:null}}
   const bh0={};for(const c of COINS){const i=P[c].i4.get(tl[0]);bh0[c]=P[c].h[i??0].c}
-  return{P,tl,k:0,acc,cap,risk,filt:$('cFilt').value==='1',skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
+  return{P,tl,k:0,acc,cap,risk,ev:[],filt:$('cFilt').value==='1',skipped:0,peak:cap,mdd:0,eq:[],bh:[],reg:[],trades:[],bh0,cool:{},price:{}}}
 function posVal(p,pr){if(p.kind==='spot')return p.qty*pr*(1-SLIP)*(1-FEE);const ex=pr*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)}
 function aEq(a,pr){return a.cash+(a.pos?posVal(a.pos,pr):0)}
 function total(){let s=0;for(const k in W)for(const c of COINS)s+=aEq(X.acc[k][c],X.price[c]||0);return s}
-function close(k,c,pr,why,t){const a=X.acc[k][c],p=a.pos;if(!p)return;a.cash+=posVal(p,pr);a.pos=null;const pnl=a.cash-p.cap0;X.trades.push({k,c,why,pnl,t,side:p.side});
+function close(k,c,pr,why,t){const a=X.acc[k][c],p=a.pos;if(!p)return;a.cash+=posVal(p,pr);a.pos=null;const pnl=a.cash-p.cap0;X.trades.push({k,c,why,pnl,t,side:p.side});X.ev.push({t,c,k,io:'out',side:p.side,px:pr,pnl,why});
   if(k==='A'&&pnl<0)X.cool[c]=t+3*H4;feed(t,pnl>=0?'b':'k',`${k} · ${c}${p.side<0?' Short':''} ${why} · ${pnl>=0?'+':''}${eur(pnl,2)}`)}
 const FEED=[];function feed(t,cls,msg){FEED.unshift({t,cls,msg});if(FEED.length>60)FEED.length=60}
 function brake(){return (X.peak-total())/X.peak>0.15}
@@ -229,16 +237,16 @@ function step(){
       if(sd&&X.filt&&(P.adx[i]>=30||P.bwp[i]<0.4)){X.skipped++;sd=0}
       if(sd){const stop=2*P.atr[i],eq=a.cash,risk=eq*X.risk/100*(brake()?0.5:1);const notional=Math.min(risk/(stop/x.c+2*FFEE+2*SLIP),eq*2*0.95),margin=notional/2;
         if(margin>=1){const f=x.c*(1+sd*SLIP);a.pos={kind:'lev',side:sd,qty:notional/f,margin,entry:f,mid:x.c,sl:x.c-sd*stop,R:stop,best:x.c,be:false,trail:false,fund:0,cap0:a.cash};a.cash-=margin+notional*FFEE;
-          feed(end,'i',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(x.c)}`)}}}
+          feed(end,'i',`A · ${c} ${sd>0?'LONG':'SHORT'} @ ${px(x.c)}`);X.ev.push({t:end,c,k:'A',io:'in',side:sd,px:x.c})}}}
     // Tagesschluss
     if(end%DAY===0){const j=P.iD.get(end-DAY);if(j==null)continue;if(c==='BTC')lastD=j;const d=P.d[j];
       const b=X.acc.B[c];
       if(b.pos){if(d.c>P.s5[j])close('B',c,d.c,'Erholung',end)}
-      else if(d.c>P.s200[j]&&P.r2[j]<10){const size=b.cash*(brake()?0.5:1);if(size>=1){b.pos={kind:'spot',side:1,qty:size*(1-FEE)/(d.c*(1+SLIP)),mid:d.c,cap0:b.cash};b.cash-=size;feed(end,'i',`B · ${c} KAUF @ ${px(d.c)} (RSI(2) ${P.r2[j].toFixed(0)})`)}}
+      else if(d.c>P.s200[j]&&P.r2[j]<10){const size=b.cash*(brake()?0.5:1);if(size>=1){b.pos={kind:'spot',side:1,qty:size*(1-FEE)/(d.c*(1+SLIP)),mid:d.c,cap0:b.cash};b.cash-=size;feed(end,'i',`B · ${c} KAUF @ ${px(d.c)} (RSI(2) ${P.r2[j].toFixed(0)})`);X.ev.push({t:end,c,k:'B',io:'in',side:1,px:d.c})}}
       const bj=X.P.BTC.iD.get(end-DAY),bull=bj!=null&&regimeAt(bj),cc=X.acc.C[c];let tg=bull?P.tsm[j]:0;if(brake())tg*=0.5;
       const eq=aEq(cc,d.c),cur=cc.pos?cc.pos.qty*d.c/eq:0;
       if(Math.abs(tg-cur)>=0.05){if(tg===0)close('C',c,d.c,bull?'Momentum weg':'Bärenmodus – raus',end);
-        else{const fee=Math.abs(tg-cur)*eq*(FEE+SLIP),cap0=cc.pos?cc.pos.cap0:eq;cc.cash=eq-tg*eq-fee;cc.pos={kind:'spot',side:1,qty:tg*eq/d.c,mid:d.c,cap0}}}}}
+        else{const fee=Math.abs(tg-cur)*eq*(FEE+SLIP),cap0=cc.pos?cc.pos.cap0:eq;cc.cash=eq-tg*eq-fee;if(!cc.pos||tg>cur)X.ev.push({t:end,c,k:'C',io:'in',side:1,px:d.c,share:tg});cc.pos={kind:'spot',side:1,qty:tg*eq/d.c,mid:d.c,cap0}}}}}
   const tot=total();X.peak=Math.max(X.peak,tot);X.mdd=Math.max(X.mdd,(X.peak-tot)/X.peak*100);X.eq.push(tot);
   let bh=0;for(const c of COINS)bh+=X.cap/6*(X.price[c]/X.bh0[c])*(1-FEE)**2;X.bh.push(bh);
   const bj=X.P.BTC.iD.get(Math.floor(end/DAY)*DAY-DAY);X.reg.push(bj!=null&&regimeAt(bj)?1:0);
@@ -261,7 +269,7 @@ function render(){if(!X)return;const n=X.tl.length,k=Math.min(X.k,n),t=X.tl[Math
   $('feed').innerHTML=FEED.slice(0,40).map((f,i)=>`<div class="${f.cls}${i===0?' new':''}">${dfmt(f.t)} ${esc(f.msg)}</div>`).join('');$('trInfo').textContent=tr.length?tr.length+' abgeschlossen':'';
   const rs={};for(const x of tr){const key=x.k+' · '+x.why,o=rs[key]||(rs[key]={n:0,s:0});o.n++;o.s+=x.pnl}
   $('rsBody').innerHTML=Object.entries(rs).sort((p,q)=>q[1].s-p[1].s).map(([kk,o])=>`<tr><td>${esc(kk)}</td><td class="n">${o.n}</td><td class="n ${o.s>=0?'up':'down'}">${o.s>=0?'+':''}${eur(o.s,2)}</td></tr>`).join('');$('rsEmpty').style.display=tr.length?'none':'';
-  draw()}
+  draw();drawPC()}
 function draw(){const o=canv($('eqc'));if(!o||!X)return;const {g,W:Wd,H}=o,n=X.tl.length,len=X.eq.length;if(len<2)return;const R=56;
   const step=Math.max(1,Math.floor(len/700));let lo=X.cap,hi=X.cap;for(let i=0;i<len;i+=step){lo=Math.min(lo,X.eq[i],X.bh[i]);hi=Math.max(hi,X.eq[i],X.bh[i])}
   lo=Math.min(lo,X.eq[len-1],X.bh[len-1]);hi=Math.max(hi,X.eq[len-1],X.bh[len-1]);const pad=(hi-lo)*0.06||X.cap*0.02;lo-=pad;hi+=pad;
@@ -271,8 +279,37 @@ function draw(){const o=canv($('eqc'));if(!o||!X)return;const {g,W:Wd,H}=o,n=X.t
   g.font='10px Inter,sans-serif';g.fillStyle='#7f978a';for(let j=0;j<=3;j++){const v=lo+(hi-lo)*j/3;g.strokeStyle='#14241c';g.beginPath();g.moveTo(0,y(v));g.lineTo(Wd-R,y(v));g.stroke();g.fillText(eur(v),Wd-R+4,y(v)+3)}
   g.strokeStyle='#2a3d33';g.setLineDash([4,4]);g.beginPath();g.moveTo(0,y(X.cap));g.lineTo(Wd-R,y(X.cap));g.stroke();g.setLineDash([]);
   for(const [arr,col,lw] of [[X.bh,'#e8f3ec66',1.3],[X.eq,'#3ee08f',2.4]]){g.strokeStyle=col;g.lineWidth=lw;g.beginPath();for(let i=0;i<len;i+=step)i?g.lineTo(x(i),y(arr[i])):g.moveTo(0,y(arr[i]));g.lineTo(x(len-1),y(arr[len-1]));g.stroke()}
-  g.lineWidth=1;g.fillStyle='#3ee08f';g.beginPath();g.arc(x(len-1),y(X.eq[len-1]),4,0,7);g.fill();
+  g.lineWidth=1;
+  for(const e of X.ev){if(e.io!=='in'||e.k==='C')continue;const i=Math.round((e.t-H4-X.tl[0])/H4);if(i<0||i>=len)continue;const X0=x(i),Y0=y(X.eq[i]);g.fillStyle=e.side>0?'#3ee08f':'#ff5d5d';g.beginPath();if(e.side>0){g.moveTo(X0,Y0+3);g.lineTo(X0-3,Y0+9);g.lineTo(X0+3,Y0+9)}else{g.moveTo(X0,Y0-3);g.lineTo(X0-3,Y0-9);g.lineTo(X0+3,Y0-9)}g.fill()}
+  g.fillStyle='#3ee08f';g.beginPath();g.arc(x(len-1),y(X.eq[len-1]),4,0,7);g.fill();
   g.fillStyle='#7f978a';g.fillText(dfmt(X.tl[0]),2,H-2);const e=dfmt(X.tl[n-1]);g.fillText(e,Wd-R-g.measureText(e).width,H-2)}
+
+/* ---------- Kurs-Chart mit Ein- und Ausstiegen ---------- */
+let pcCoin='BTC',pcSys='A',pcHits=[];
+function drawPC(){const o=canv($('pc'));if(!o||!X)return;const {g,W:Wd,H}=o,P=X.P[pcCoin],len=X.k;if(len<2)return;const R=60;
+  const i0=P.i4.get(X.tl[0])??0,iE=P.i4.get(X.tl[Math.min(len,X.tl.length)-1])??i0,hs=P.h.slice(i0,iE+1),n=X.tl.length;
+  let lo=Infinity,hi=-Infinity;for(const c of hs){lo=Math.min(lo,c.l);hi=Math.max(hi,c.h)}const pad=(hi-lo)*0.05;lo-=pad;hi+=pad;
+  const x=t=>(t-X.tl[0])/((n-1)*H4)*(Wd-R),y=v=>8+(hi-v)/(hi-lo)*(H-24);
+  g.fillStyle='rgba(255,93,93,0.08)';let s=-1;for(let i=0;i<=X.reg.length;i++){const bear=i<X.reg.length&&!X.reg[i];if(bear&&s<0)s=i;if(!bear&&s>=0){g.fillRect(x(X.tl[s]),0,x(X.tl[i-1]||X.tl[s])-x(X.tl[s]),H-16);s=-1}}
+  g.font='10px Inter,sans-serif';g.fillStyle='#7f978a';for(let j=0;j<=3;j++){const v=lo+(hi-lo)*j/3;g.strokeStyle='#14241c';g.beginPath();g.moveTo(0,y(v));g.lineTo(Wd-R,y(v));g.stroke();g.fillText(px(v),Wd-R+4,y(v)+3)}
+  g.strokeStyle='#c9d4ce';g.lineWidth=1.2;g.beginPath();const st=Math.max(1,Math.floor(hs.length/900));hs.forEach((c,i)=>{if(i%st&&i<hs.length-1)return;const X0=x(c.t),Y0=y(c.c);i?g.lineTo(X0,Y0):g.moveTo(X0,Y0)});g.stroke();g.lineWidth=1;
+  pcHits=[];const evs=X.ev.filter(e=>e.c===pcCoin&&(pcSys==='alle'||e.k===pcSys));
+  // Verbindungslinien Einstieg -> Ausstieg
+  const open={};for(const e of evs){const key=e.k;if(e.io==='in'&&!open[key])open[key]=e;else if(e.io==='out'&&open[key]){const a=open[key];g.strokeStyle=e.pnl>=0?'rgba(62,224,143,.45)':'rgba(255,93,93,.45)';g.beginPath();g.moveTo(x(a.t),y(a.px));g.lineTo(x(e.t),y(e.px));g.stroke();open[key]=null}}
+  for(const e of evs){const X0=x(e.t),Y0=y(e.px);if(X0<0||X0>Wd-R)continue;pcHits.push({X:X0,Y:Y0,e});
+    if(e.io==='in'){g.fillStyle=e.side>0?'#3ee08f':'#ff5d5d';g.beginPath();if(e.side>0){g.moveTo(X0,Y0+2);g.lineTo(X0-5,Y0+11);g.lineTo(X0+5,Y0+11)}else{g.moveTo(X0,Y0-2);g.lineTo(X0-5,Y0-11);g.lineTo(X0+5,Y0-11)}g.fill()}
+    else{g.fillStyle=e.pnl>=0?'#3ee08f':'#ff5d5d';g.beginPath();g.arc(X0,Y0,3.5,0,7);g.fill();g.strokeStyle='#07100c';g.stroke()}}
+  g.fillStyle='#7f978a';g.fillText(dfmt(X.tl[0]),2,H-2);const e2=dfmt(X.tl[n-1]);g.fillText(e2,Wd-R-g.measureText(e2).width,H-2);
+  const nIn=evs.filter(e=>e.io==='in').length,nOut=evs.filter(e=>e.io==='out'),w=nOut.filter(e=>e.pnl>0).length;
+  $('pcInfo').textContent=`${pcCoin} · ${pcSys==='alle'?'alle Systeme':'System '+pcSys} · ${nIn} Einstiege${nOut.length?' · '+w+'/'+nOut.length+' im Plus':''}`}
+function tabs(){$('coinTabs').innerHTML=COINS.map(c=>`<button type="button" data-c="${c}" class="${c===pcCoin?'on':''}">${c}</button>`).join('');
+  $('sysTabs').innerHTML=[['A','A Trend'],['B','B RSI-2'],['C','C Momentum'],['alle','Alle']].map(([k,l])=>`<button type="button" data-s="${k}" class="${k===pcSys?'on':''}">${l}</button>`).join('')}
+$('coinTabs').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(b){pcCoin=b.dataset.c;tabs();drawPC();$('pcTip').textContent=''}});
+$('sysTabs').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b){pcSys=b.dataset.s;tabs();drawPC();$('pcTip').textContent=''}});
+$('pc').addEventListener('click',ev=>{const r=$('pc').getBoundingClientRect(),mx=ev.clientX-r.left,my=ev.clientY-r.top;let best=null,bd=1e9;for(const h of pcHits){const d=(h.X-mx)**2+(h.Y-my)**2;if(d<bd){bd=d;best=h}}
+  if(!best||bd>900){$('pcTip').textContent='';return}const e=best.e;
+  $('pcTip').innerHTML=`<b>${dfmt(e.t)}</b> · System ${e.k} · ${e.io==='in'?(e.side>0?'Long-Kauf':'Short-Einstieg')+(e.share!=null?' (Anteil '+Math.round(e.share*100)+' %)':''):'Ausstieg: '+esc(e.why)} @ ${px(e.px)}${e.io==='out'?` · <span class="${e.pnl>=0?'up':'down'}">${e.pnl>=0?'+':''}${eur(e.pnl,2)}</span>`:''}`});
+tabs();
 
 /* ---------- Ablauf ---------- */
 function loop(ts){if(!running)return;if(!last)last=ts;const dt=Math.min(250,ts-last);last=ts;acc+=dt/1000*20*speed;let k=Math.floor(acc);acc-=k;
@@ -294,7 +331,7 @@ for(const id of ['cPer','cCap','cRisk','cFilt'])$(id).addEventListener('change',
 $('spd').innerHTML=[1,2,3,4,5].map(v=>`<button type="button" data-v="${v}">${v}×</button>`).join('');
 const mark=()=>{for(const b of $('spd').children)b.className=+b.dataset.v===speed?'on':''};
 $('spd').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){speed=+b.dataset.v;mark();render()}});
-new ResizeObserver(()=>draw()).observe(document.body);
+new ResizeObserver(()=>{draw();drawPC()}).observe(document.body);
 try{const s=JSON.parse(localStorage.getItem('mr.v1'));if(s){$('cPer').value=String(s.days);$('cCap').value=s.cap;$('cRisk').value=s.risk;speed=s.speed||3}}catch(e){}
 mark();fetch('https://data-api.binance.vision/api/v3/ticker/price?symbol=EURUSDT').then(r=>r.json()).then(j=>{if(+j.price)RATE=1/+j.price}).catch(()=>{});
 window.__mr={get X(){return X}};
