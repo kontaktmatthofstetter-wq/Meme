@@ -125,7 +125,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <label>Festes Risiko pro Trend-Trade (%)<input id="cRisk" type="number" inputmode="decimal" step="0.5" value="3"></label>
     <label>Stop-Filter (ADX + Bandbreite)<select id="cFilt"><option value="1" selected>An – neue Version</option><option value="0">Aus – alte Version</option></select></label>
     <label>Wende-Ausbruch (Long)<select id="cBrk"><option value="1" selected>An – fängt verpasste Rallyes</option><option value="0">Aus</option></select></label>
-    <label>Risikostufe<select id="cLvl"><option value="1">Normal (×1)</option><option value="1.5" selected>Erhöht (×1,5) – empfohlen</option><option value="2">Aggressiv (×2)</option></select></label>
+    <label>Risikostufe<select id="cLvl"><option value="1">Normal (×1)</option><option value="1.5">Erhöht (×1,5)</option><option value="2">Aggressiv (×2)</option><option value="3">Hoch (×3)</option><option value="4" selected>Maximum (×4)</option></select></label>
     <label>Hebel-Automatik<select id="cAuto"><option value="1" selected>An – Hebel nach Sicherheit</option><option value="0">Aus – festes Risiko</option></select></label>
   </div>
   <div class="row" style="align-items:center">
@@ -171,7 +171,7 @@ details.card summary{cursor:pointer;font-weight:600;min-height:28px}
     <div class="scroll"><table><thead><tr><th>System · Grund</th><th class="n">Trades</th><th class="n">Summe</th></tr></thead><tbody id="rsBody"></tbody></table></div>
     <div class="empty" id="rsEmpty">Noch nichts.</div></div>
 </div>
-<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Hebel-Automatik: Sicherheit 0–3 Punkte (Bandbreite über 62 %, Volumen über 1,96×, Schwankung unter 1,73 %) → Risiko 1 / 2,5 / 4 / 6 % pro Trade, mal Risikostufe (Normal ×1, Erhöht ×1,5, Aggressiv ×2), max. 5x Hebel. Trendfolge mit Wende-Ausbruch (Long, wenn der Kurs mit Volumen über das 30-Kerzen-Hoch springt und EMA 21 über EMA 50 liegt) und Stop-Filter: kein Einstieg bei ADX ≥ 30 oder Bollinger-Bandbreite unter 40 % der letzten 120 Kerzen. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
+<p class="note" style="margin-top:12px">Gleiche Regeln wie der Live-Meta-Bot: A Trendfolge Long/Short auf 4-Stunden-Kerzen (40 %), B RSI-2 auf Tageskerzen (30 %), C Momentum mit BTC-Schalter (30 %), Notbremse ab 15 % Rückgang. Hebel-Automatik: Sicherheit 0–3 Punkte (Bandbreite über 62 %, Volumen über 1,96×, Schwankung unter 1,73 %) → Risiko 1 / 2,5 / 4 / 6 % pro Trade, mal Risikostufe (×1 bis ×4), max. 5x Hebel. Trendfolge mit Wende-Ausbruch (Long, wenn der Kurs mit Volumen über das 30-Kerzen-Hoch springt und EMA 21 über EMA 50 liegt) und Stop-Filter: kein Einstieg bei ADX ≥ 30 oder Bollinger-Bandbreite unter 40 % der letzten 120 Kerzen. Kosten: Spot 0,1 %, Futures 0,05 % je Seite, 0,02 % Slippage, Funding für Longs. Ein Rückblick ist keine Garantie für die Zukunft.</p>
 <p class="note"><a href="meta.html">← Live-Meta-Bot</a> · <a href="backtest.html">Backtest Arena</a></p>
 </div>
 
