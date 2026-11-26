@@ -39,6 +39,13 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}
 .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .note{color:var(--mute);font-size:12.5px;margin:8px 0 0}
+.fc{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:900px){.fc{grid-template-columns:repeat(2,1fr)}}@media (max-width:560px){.fc{grid-template-columns:1fr}}
+.fcc{background:var(--card2);border-radius:14px;padding:12px;border:1px solid var(--line)}
+.fcc .dir{font-size:20px;font-weight:800}.fcc ul{margin:6px 0 0;padding-left:18px;font-size:13px}.fcc li{margin:3px 0}
+.conf{height:8px;border-radius:4px;background:#222;margin:6px 0}.conf i{display:block;height:8px;border-radius:4px}
+.nw{font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}.nw .s{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none}
+.hl{font-size:12px;color:var(--mute);margin-top:6px;border-top:1px solid var(--line);padding-top:6px}
 </style>
 </head>
 <body>
@@ -60,6 +67,19 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
       <div id="wts"></div>
       <p class="note" id="nextReb"></p>
     </div>
+  </div>
+
+  <div class="card" id="newsCard">
+    <h2>🧠 Was denkt der Bot? Nachrichten & Prognose (nächste 24 Stunden)</h2>
+    <div class="sub" id="nMeta">Lade Analyse…</div>
+    <p id="nMarkt" style="margin:8px 0 12px"></p>
+    <div class="fc" id="nCoins"></div>
+    <div id="nRisk"></div>
+    <div class="hero" style="margin-top:0">
+      <div class="card" style="background:var(--card2)"><h2>Wie gut lagen seine Prognosen?</h2><div id="nAcc" class="sub">Noch keine Prognose geprüft – das geht frühestens 24 Stunden nach der ersten.</div></div>
+      <div class="card" style="background:var(--card2)"><h2>Schlagzeilen, die er gelesen hat</h2><div id="nList" class="feed"></div></div>
+    </div>
+    <p class="note">Die Prognosen werden alle 2 Stunden neu erstellt und nach 24 Stunden mit dem echten Kurs verglichen. Sie handeln noch nicht mit – erst wenn die Trefferquote über längere Zeit gut ist, lohnt es sich, sie einzubauen.</p>
   </div>
 
   <div class="card">
@@ -113,9 +133,9 @@ const eqMain=()=>Object.keys(S.vars).reduce((s,v)=>s+S.units[v]*eqV(v),0);
 $('cTabs').innerHTML=COINS.map(c=>`<button class="btn${c===coin?' on':''}" type="button" data-c="${c}">${c}</button>`).join('');
 $('cTabs').onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;coin=b.dataset.c;for(const x of $('cTabs').children)x.classList.toggle('on',x.dataset.c===coin);loadK(coin).then(drawK)};
 function cv(id){const c=$(id),r=devicePixelRatio||1,w=c.clientWidth,h=+c.getAttribute('height');c.width=w*r;c.height=h*r;const g=c.getContext('2d');g.setTransform(r,0,0,r,0,0);return[g,w,h]}
-async function loadK(c){for(const b of ['https://data-api.binance.vision','https://api.binance.com']){try{const r=await fetch(`${b}/api/v3/klines?symbol=${c}USDT&interval=4h&limit=120`,{cache:'no-store'});if(r.ok){K[c]=(await r.json()).map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4]}));live[c]=K[c][K[c].length-1].c;return}}catch(e){}}}
+async function loadK(c){const srcs=[...(URL_?[URL_.replace(/\/$/,'')+`/api/k?c=${c}&`]:[]),...['https://data-api.binance.vision','https://api.binance.com'].map(b=>`${b}/api/v3/klines?symbol=${c}USDT&interval=4h&limit=120&`)];for(const b of srcs){try{const r=await fetch(b+'x='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();if(!j.length)continue;K[c]=j.map(k=>({t:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4]}));live[c]=K[c][K[c].length-1].c;return}}catch(e){}}K[c]=K[c]||'err'}
 async function loadPx(){try{const r=await fetch('https://data-api.binance.vision/api/v3/ticker/price?symbols='+encodeURIComponent(JSON.stringify(COINS.map(c=>c+'USDT'))),{cache:'no-store'});if(r.ok)for(const x of await r.json())live[x.symbol.replace('USDT','')]=+x.price}catch(e){}}
-function drawK(){const ks=K[coin];if(!ks||!S)return;const[g,W,H]=cv('cK'),R=64;let lo=Infinity,hi=-Infinity;for(const k of ks){lo=Math.min(lo,k.l);hi=Math.max(hi,k.h)}
+function drawK(){const ks=K[coin];if(!ks||ks==='err'||!S){const[g,W,H]=cv('cK');g.fillStyle='#8a8a8a';g.font='14px Inter,sans-serif';g.fillText(ks==='err'?'Kerzen konnten gerade nicht geladen werden – neuer Versuch in 2 Minuten.':'Lade Kerzen…',12,30);return}const[g,W,H]=cv('cK'),R=64;let lo=Infinity,hi=-Infinity;for(const k of ks){lo=Math.min(lo,k.l);hi=Math.max(hi,k.h)}
   const open=[];for(const v in S.vars){if(!(S.units[v]>0))continue;const p=S.vars[v].acc[coin].pos;if(p){open.push([v,p]);lo=Math.min(lo,p.mid,p.sl||p.mid);hi=Math.max(hi,p.mid,p.sl||p.mid)}}
   const pad=(hi-lo)*0.06;lo-=pad;hi+=pad;const cw=(W-R)/ks.length,x=j=>(j+0.5)*cw,y=v=>8+(hi-v)/(hi-lo)*(H-24),t0=ks[0].t,xt=t=>x((t-t0)/(4*3600e3)-1);
   g.font='11px Inter,sans-serif';for(let q=0;q<=4;q++){const v=lo+(hi-lo)*q/4;g.strokeStyle='#161616';g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle='#8a8a8a';g.fillText(px(v),W-R+4,y(v)+4)}
@@ -125,12 +145,30 @@ function drawK(){const ks=K[coin];if(!ks||!S)return;const[g,W,H]=cv('cK'),R=64;l
   for(const e of S.ev){if(e.c!==coin||e.v==='main'||!(S.units[e.v]>0)||e.t<t0)continue;const X=xt(e.t),Y=y(e.px);if(X<0||X>W-R)continue;
     if(e.io==='in'){g.fillStyle=e.side>0?'#22c55e':'#ef4444';g.fillText(e.side>0?'▲':'▼',X,e.side>0?Y+14:Y-4)}else if(e.io==='add'){g.fillStyle='#5aa8ff';g.fillText('◆',X,Y+4)}else{g.fillStyle=e.pnl>=0?'#22c55e':'#ef4444';g.beginPath();g.arc(X,Y,4,0,7);g.fill()}}
   g.textAlign='start';g.font='11px Inter,sans-serif';g.fillStyle='#8a8a8a';g.fillText(coin+'/USDT · 4-Stunden-Kerzen',4,H-3)}
-function drawEq(){const[g,W,H]=cv('cEq'),R=58,a=[...S.mainD,...(S.mainI||[]).filter(p=>p[0]>(S.mainD.at(-1)||[0])[0])];if(a.length<2)return;
-  let lo=Infinity,hi=-Infinity;for(const p of a){lo=Math.min(lo,p[1]);hi=Math.max(hi,p[1])}lo=Math.min(lo,900);const t0=a[0][0],t1=a.at(-1)[0],x=t=>(t-t0)/(t1-t0)*(W-R),y=v=>H-16-(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo))*(H-26);
+function drawEq(){const[g,W,H]=cv('cEq'),R=58,a=[...S.mainD,...(S.mainI||[]).filter(p=>p[0]>(S.mainD.length?S.mainD[S.mainD.length-1][0]:0))];if(a.length<2)return;
+  let lo=Infinity,hi=-Infinity;for(const p of a){lo=Math.min(lo,p[1]);hi=Math.max(hi,p[1])}lo=Math.min(lo,900);const t0=a[0][0],t1=a[a.length-1][0],x=t=>(t-t0)/(t1-t0)*(W-R),y=v=>H-16-(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo))*(H-26);
   g.font='11px Inter,sans-serif';g.strokeStyle='#1f1f1f';g.fillStyle='#8a8a8a';for(const v of [1000,2000,5000,10000,20000,50000,100000]){if(v<lo||v>hi)continue;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillText((v/1000)+'k €',W-R+4,y(v)+4)}
   let py=new Date(t0).getUTCFullYear();for(const p of a){const Y=new Date(p[0]).getUTCFullYear();if(Y!==py){g.fillStyle='#333';g.fillRect(x(p[0]),0,1,H-14);g.fillStyle='#8a8a8a';g.fillText(Y,x(p[0])+2,H-2);py=Y}}
   g.strokeStyle='#22c55e';g.lineWidth=2;g.beginPath();a.forEach((p,i)=>i?g.lineTo(x(p[0]),y(p[1])):g.moveTo(0,y(p[1])));g.stroke();g.lineWidth=1;
   if(S.live0){g.strokeStyle='#5aa8ff';g.setLineDash([4,4]);g.beginPath();g.moveTo(x(S.live0),0);g.lineTo(x(S.live0),H-14);g.stroke();g.setLineDash([]);g.fillStyle='#5aa8ff';g.fillText('live ab hier',Math.min(x(S.live0)-62,W-R-62),12)}}
+let NW=null;
+async function pullN(){try{if(!URL_){const r=await fetch('cloud-url.json?'+Date.now(),{cache:'no-store'});if(r.ok)URL_=(await r.json()).url}if(!URL_)return;
+  const r=await fetch(URL_.replace(/\/$/,'')+'/api/news?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(j&&j.fc){NW=j;renderN()}else $('nMeta').textContent='Die erste Analyse kommt in den nächsten 2 Stunden.'}catch(e){}}
+const DIR={steigt:['↗','var(--up)','steigt'],'fällt':['↘','var(--down)','fällt'],'seitwärts':['→','var(--warn)','seitwärts']};
+function renderN(){const f=NW.fc,ago=Math.round((Date.now()-f.at)/60000);
+  $('nMeta').textContent=`Analyse von ${tm(f.at)} (vor ${ago<60?ago+' Min':Math.round(ago/60)+' Std'}) · Quelle: ${f.quelle} · ${NW.news?NW.news.length:0} Schlagzeilen gelesen · Marktphase: ${f.reg}`;
+  $('nMarkt').textContent=f.markt||'';
+  $('nCoins').innerHTML=COINS.filter(c=>f.coins[c]).map(c=>{const o=f.coins[c],d=DIR[o.richtung]||DIR['seitwärts'],t=o.tech||{};
+    return`<div class="fcc"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">${c}</b><span class="dir" style="color:${d[1]}">${d[0]} ${d[2]}</span></div>
+    <div class="sub">Preis ${o.px?px(o.px):'–'} · 24h ${t.ch1!=null?(t.ch1>=0?'+':'')+String(t.ch1).replace('.',',')+' %':'–'} · 7 Tage ${t.ch7!=null?(t.ch7>=0?'+':'')+String(t.ch7).replace('.',',')+' %':'–'} · RSI ${t.rsi??'–'}</div>
+    <div class="conf"><i style="width:${o.sicherheit}%;background:${d[1]}"></i></div><div class="sub">Sicherheit: ${o.sicherheit} %</div>
+    <ul>${(o.gruende||[]).map(g=>`<li>${esc(g)}</li>`).join('')}</ul>${o.news&&o.news.length?`<div class="hl">📰 ${o.news.map(esc).join('<br>📰 ')}</div>`:''}</div>`}).join('');
+  $('nRisk').innerHTML=f.risiken&&f.risiken.length?`<div class="card" style="background:var(--card2)"><h2>⚠️ Was die Prognose kippen könnte</h2><ul style="margin:0;padding-left:18px;font-size:13px">${f.risiken.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>`:'';
+  const st=NW.stats||{},all=st.all;
+  if(all&&all.n){$('nAcc').innerHTML=`<div class="big" style="font-size:28px">${Math.round(all.ok/all.n*100)} %</div><div class="sub">${all.ok} von ${all.n} Prognosen lagen richtig (Zufall wäre etwa 33–50 %).</div>
+    <table style="margin-top:8px"><tbody>${COINS.filter(c=>st[c]).map(c=>`<tr><td>${c}</td><td class="n">${st[c].ok}/${st[c].n}</td><td class="n">${Math.round(st[c].ok/st[c].n*100)} %</td></tr>`).join('')}</tbody></table>
+    <div style="margin-top:8px">${(NW.hist||[]).slice(0,8).map(h=>`<div class="sub">${h.ok?'✅':'❌'} ${tm(h.t)} · ${h.c} „${h.richtung}“ → tatsächlich ${h.ch>=0?'+':''}${String(h.ch).replace('.',',')} %</div>`).join('')}</div>`}
+  $('nList').innerHTML=(NW.news||[]).slice(0,25).map(n=>`<div class="nw"><span class="s" style="background:${n.sent>0.2?'var(--up)':n.sent<-0.2?'var(--down)':'#666'}"></span><span>${n.link&&/^https?:/.test(n.link)?`<a href="${esc(n.link)}" target="_blank" rel="noopener">${esc(n.title)}</a>`:esc(n.title)}<br><span class="sub">${esc(n.src)} · ${tm(n.t)} · ${n.coins.join(', ')}</span></span></div>`).join('')||'<div class="sub">Keine Schlagzeilen.</div>'}
 function render(){if(!S||!S.vars)return;const m=eqMain();let pk=S.mainPeak||m;pk=Math.max(pk,m);
   $('eq').textContent=eur(m);const l0=S.liveEq0||m;$('live').innerHTML=`Seit Live-Start (${S.live0?tm(S.live0):'–'}): <span class="${m>=l0?'up':'down'}">${m>=l0?'+':''}${eur(m-l0)} (${((m/l0-1)*100).toFixed(2).replace('.',',')} %)</span> · seit 2020: ${((m/1000-1)*100).toFixed(0)} %`;
   $('dd').textContent='Rückgang vom Hoch: '+Math.round((pk-m)/pk*100)+' %';
@@ -155,7 +193,7 @@ async function pull(){try{
   S=s;const ago=Math.round((Date.now()-S.lastRun)/60000);st(ago<=10?'ok':'err',ago<=10?`Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`Letzter Cloud-Lauf vor ${ago} Min`);render()
 }catch(e){st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
 function st(c,t){$('dot').className='dot '+c;$('st').textContent=t}
-pull();setInterval(pull,30000);loadK(coin).then(render);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>loadK(coin).then(drawK),120000);
+pull().then(()=>loadK(coin)).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin]==='err')delete K[coin];loadK(coin).then(drawK)},120000);
 new ResizeObserver(()=>{if(S){drawK();drawEq()}}).observe(document.body);
 })();
 </script>

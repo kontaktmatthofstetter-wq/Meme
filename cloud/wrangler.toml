@@ -10,3 +10,6 @@ crons = ["*/5 * * * *"]
 [[kv_namespaces]]
 binding = "STATE"
 id = "6c41d066dd114c3396043c9e34ee31f1"
+
+[ai]
+binding = "AI"

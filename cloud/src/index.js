@@ -1,6 +1,7 @@
 // Lern-Bot als Cloudflare Worker – läuft rund um die Uhr (Paper-Trading, kein echtes Geld)
 // Alle 5 Minuten: Kurse holen, Stops prüfen, neue 4h-/Tageskerzen der Reihe nach an die Engine geben, Zustand in KV speichern.
 import * as E from './engine.js';
+import { analyze } from './news.js';
 const { COINS, H4, DAY } = E;
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api.binance.us'];
 const INIT = 'https://raw.githubusercontent.com/kontaktmatthofstetter-wq/Meme/main/cloud/init-state.json';
@@ -65,6 +66,8 @@ export async function run(env, now = Date.now()) {
   if (S.regH.length > 400) S.regH.splice(0, S.regH.length - 400);
   S.lastRun = now;
   await env.STATE.put('state', JSON.stringify(S));
+  // Nachrichten + Prognose alle 2 Stunden (ungerade UTC-Stunden, nicht zeitgleich mit 4h-Kerzen)
+  if (new Date(now).getUTCHours() % 2 === 1 || !(await env.STATE.get('news'))) { try { await analyze(env, S, getJSON, now); } catch (e) { await env.STATE.put('newsErr', String(e && e.stack || e)); } }
   return S;
 }
 
@@ -79,6 +82,11 @@ export default {
   async fetch(req, env) {
     const u = new URL(req.url);
     if (u.pathname === '/api/state') { const s = await env.STATE.get('state'); return new Response(s || '{}', { headers: CORS }); }
+    if (u.pathname === '/api/news') { const s = await env.STATE.get('news'); return new Response(s || '{}', { headers: CORS }); }
+    if (u.pathname === '/api/k') {   // Kerzen für die Seite (falls Binance im Browser nicht lädt)
+      const c = u.searchParams.get('c'), iv = u.searchParams.get('i') === '1d' ? '1d' : '4h'; if (!COINS.includes(c)) return new Response('[]', { status: 400, headers: CORS });
+      const j = await getJSON(`/api/v3/klines?symbol=${c}USDT&interval=${iv}&limit=120`); return new Response(JSON.stringify(j || []), { headers: CORS });
+    }
     if (u.pathname === '/api/err') { const e = await env.STATE.get('err'); return new Response(e || '{}', { headers: CORS }); }
     if (u.pathname === '/api/run') {   // von Hand anstoßen – höchstens alle 4 Minuten
       const s = await env.STATE.get('state'); let last = 0; try { last = s ? JSON.parse(s).lastRun || 0 : 0; } catch (e) { }
