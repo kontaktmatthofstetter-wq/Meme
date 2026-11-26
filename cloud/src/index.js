@@ -20,8 +20,12 @@ async function klines(sym, iv, n) {
   return j ? j.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] })) : null;
 }
 async function prices() {
-  const j = await getJSON('/api/v3/ticker/price?symbols=' + encodeURIComponent(JSON.stringify([...COINS.map(c => c + 'USDT'), 'EURUSDT'])));
-  const o = {}; if (j) for (const x of j) o[x.symbol.replace('USDT', '')] = +x.price; return o;
+  const o = {};
+  await Promise.all([...COINS, 'EUR'].map(async c => {
+    const j = await getJSON(`/api/v3/ticker/price?symbol=${c}USDT`);
+    if (j && j.price) o[c] = +j.price;
+  }));
+  return o;
 }
 
 /* ---------- Indikatoren ---------- */
