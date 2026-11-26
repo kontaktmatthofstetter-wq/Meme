@@ -80,6 +80,15 @@ export function eqA(a, c) {
 }
 export function eqV(v) { let s = 0; for (const c of COINS) s += eqA(S.vars[v].acc[c], c); return s; }
 export const bind = st => { S = st; };
+// Crash-Schutz: alle Long-Positionen aller Varianten schließen, Shorts absichern, Longs für eine Weile sperren
+export function emergency(st, now, why, hours) {
+  S = st; NOW = now; S.crashUntil = Math.max(S.crashUntil || 0, now + hours * 3600e3); let n = 0;
+  for (const v of VK) for (const c of COINS) { const p = S.vars[v].acc[c].pos; if (!p) continue;
+    if (p.side > 0) { closePos(v, c, 'Crash-Schutz: ' + why); n++; }
+    else if (p.kind === 'lev' && S.px[c] < p.mid) p.sl = Math.min(p.sl, p.mid); }
+  log('k', `🚨 Crash-Schutz: ${n} Long-Positionen geschlossen, keine neuen Longs bis ${new Date(S.crashUntil).toISOString().slice(11, 16)} UTC – ${why}`);
+  return n;
+}
 export function eqMain() { let s = 0; for (const v of VK) s += S.units[v] * eqV(v); return s; }
 
 function closePos(v, c, why, price) {
@@ -150,10 +159,12 @@ function step4(c, cs) {
         if (ty === 'pS' && C.S && I.adx < 30 && I.bwp >= 0.4) { sd = -1; why = 'Rücksetzer im Abwärtstrend'; break; }
       }
       if (!sd && C.brk && C.L && sig.some(s => s[0] === 'bL')) { sd = 1; why = 'Ausbruch nach oben'; }
+      if (sd > 0 && (S.crashUntil || 0) > NOW) sd = 0;
       if (sd) openLev(v, c, sd, I, [1, 2.5, 4, 6][safety(I)] * C.lvl, why);
     } else {
       let best = null; const minN = 15;
       for (const [ty, sd] of sig) { if (Ln('T:' + ty) < minN) continue; const e = predict(S, ty, feats(I, sd, bull)); if (e >= 0.1 && (!best || e > best.e)) best = { ty, sd, e }; }
+      if (best && best.sd > 0 && (S.crashUntil || 0) > NOW) best = null;
       if (best) openLev(v, c, best.sd, I, Math.min(6, Math.max(0.5, best.e * 5)) * C.lvl, `${LT[best.ty]} · gelernter Vorteil ${best.e.toFixed(2).replace('.', ',')}R`);
     }
   }
@@ -170,13 +181,13 @@ function regimeOf(d) {
 function stepB(c, d) {
   const a = S.vars.rsi2.acc[c], cl = d.map(x => x.c), n = cl.length - 1, r2 = rsiA(cl, 2)[n], s200 = sma(cl, 200, n), s5 = sma(cl, 5, n);
   if (a.pos) { if (cl[n] > s5) closePos('rsi2', c, 'Schluss über 5-Tage-Schnitt'); return; }
-  if (n >= 200 && cl[n] > s200 && r2 < 10) { const pr = cl[n], size = a.cash; if (size < 0.5) return;
+  if (n >= 200 && cl[n] > s200 && r2 < 10 && !((S.crashUntil || 0) > NOW)) { const pr = cl[n], size = a.cash; if (size < 0.5) return;
     a.pos = { kind: 'spot', side: 1, qty: size * (1 - FEE) / (pr * (1 + SLIP)), mid: pr, cap0: a.cash, t: NOW }; a.cash = 0;
     ev({ v: 'rsi2', c, io: 'in', side: 1, px: pr, lev: 1, why: `RSI(2) ${r2.toFixed(1).replace('.', ',')} – kurzer Dip im Aufwärtstrend` }); }
 }
 function stepC(c, d) {
   const a = S.vars.mom.acc[c], cl = d.map(x => x.c), n = cl.length - 1; if (n < 91) return; let w = 0; for (const k of [10, 20, 30, 60, 90]) if (cl[n] > cl[n - k]) w++;
-  const target = S.bull ? w / 5 : 0, pr = cl[n], eq = eqA(a, c), cur = a.pos ? a.pos.qty * pr / eq : 0; if (Math.abs(target - cur) < 0.05) return;
+  const target = S.bull && !((S.crashUntil || 0) > NOW) ? w / 5 : 0, pr = cl[n], eq = eqA(a, c), cur = a.pos ? a.pos.qty * pr / eq : 0; if (Math.abs(target - cur) < 0.05) return;
   if (target === 0) { closePos('mom', c, S.bull ? 'Momentum weg' : 'BTC unter 200-Tage-Schnitt – raus'); return; }
   const diff = (target - cur) * eq, fee = Math.abs(diff) * (FEE + SLIP), cap0 = a.pos ? a.pos.cap0 : eq;
   if (!a.pos) ev({ v: 'mom', c, io: 'in', side: 1, px: pr, lev: target, why: `Momentum ${Math.round(target * 100)} % (${w}/5 Zeiträume steigen)` });

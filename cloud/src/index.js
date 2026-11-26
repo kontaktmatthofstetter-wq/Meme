@@ -1,7 +1,7 @@
 // Lern-Bot als Cloudflare Worker – läuft rund um die Uhr (Paper-Trading, kein echtes Geld)
 // Alle 5 Minuten: Kurse holen, Stops prüfen, neue 4h-/Tageskerzen der Reihe nach an die Engine geben, Zustand in KV speichern.
 import * as E from './engine.js';
-import { kiStep, freshKI, manageKI, fundKI, eqKI, alarmCheck } from './ki.js';
+import { kiStep, freshKI, manageKI, fundKI, eqKI, alarmCheck, crashCheck, push } from './ki.js';
 const { COINS, H4, DAY } = E;
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api.binance.us'];
 const INIT = 'https://raw.githubusercontent.com/kontaktmatthofstetter-wq/Meme/main/cloud/init-state.json';
@@ -73,6 +73,7 @@ export async function run(env, now = Date.now()) {
   if (S.ev.length > 700) S.ev.splice(0, S.ev.length - 700);
   if (S.regH.length > 400) S.regH.splice(0, S.regH.length - 400);
   // KI-Trader: alle 2 Stunden Daten in Stufen sammeln, dann abwägen und handeln (ungerade UTC-Stunden, nicht zeitgleich mit 4h-Kerzen)
+  try { await crashCheck(env, S, now); } catch (e) { S.kiErr = 'Crash: ' + String(e && e.stack || e).slice(0, 400); }
   let did = null;
   if (new Date(now).getUTCHours() % 2 === 1 || !S.ki.dec.length) { try { did = await kiStep(env, S, getJSON, now); S.kiStage = did || S.kiStage; } catch (e) { S.kiErr = String(e && e.stack || e).slice(0, 500); } }
   // Alarm-Prüfung in jedem Lauf, in dem nicht schon gesammelt/abgewogen wurde und keine 4h-Kerzen nachgeholt wurden
@@ -105,6 +106,11 @@ export default {
         'https://data-api.binance.vision/api/v3/depth?symbol=BTCUSDT&limit=100', 'https://api.coinbase.com/v2/prices/BTC-USD/spot', 'https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&uly=BTC-USDT&state=filled'];
       const out = await Promise.all(L.map(async x => { try { const r = await fetch(x, { headers: { 'user-agent': 'Mozilla/5.0 Lern-Bot' } }); const t = await r.text(); return [x, r.status, t.slice(0, 160)]; } catch (e) { return [x, 0, String(e)]; } }));
       return new Response(JSON.stringify({ colo: req.cf && req.cf.colo, out }, null, 1), { headers: CORS });
+    }
+    if (u.pathname === '/api/push') {   // Thema für die Handy-Benachrichtigungen + Testnachricht
+      let t = await env.STATE.get('pushTopic'); if (!t) { t = 'lernbot-' + crypto.randomUUID().slice(0, 13); await env.STATE.put('pushTopic', t); }
+      if (u.searchParams.get('test')) { const l = +(await env.STATE.get('pushTest') || 0); if (Date.now() - l > 120e3) { await env.STATE.put('pushTest', String(Date.now())); await push(env, 'Test vom KI-Trader', 'Benachrichtigungen funktionieren. Du bekommst hier Crash-Warnungen und neue Trades.', 3, 'white_check_mark'); } }
+      return new Response(JSON.stringify({ topic: t }), { headers: CORS });
     }
     if (u.pathname === '/api/clog') {   // Anzeige-Fehler der Seite sammeln (zur Fehlersuche)
       if (req.method === 'POST') { const t = (await req.text()).slice(0, 1500); const old = JSON.parse(await env.STATE.get('clog') || '[]');

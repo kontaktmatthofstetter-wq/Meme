@@ -1,6 +1,6 @@
 // KI-Trader: sammelt alles, was Kurse bewegen kann, wägt ab und handelt nach eigenem Ermessen (Spielgeld).
 // Die KI entscheidet Richtung, Hebel, Einsatz, Stop und Ziel. Der Code setzt nur Sicherheitsgrenzen durch.
-import { COINS, VARS } from './engine.js';
+import { COINS, VARS, emergency } from './engine.js';
 import { fetchNews, grade } from './news.js';
 
 const FFEE = 0.0005, SLIP = 0.0002, MAXLEV = 10, MAXRISK = 0.03, MAXMARGIN = 0.8, MAXONE = 0.25;
@@ -10,6 +10,11 @@ const r1 = x => Math.round(x * 10) / 10, r2 = x => Math.round(x * 100) / 100;
 const pct = (a, b) => (a / b - 1) * 100;
 async function J(url) { try { const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Lern-Bot)', accept: 'application/json' } }); if (!r.ok) return null; return await r.json(); } catch (e) { return null; } }
 
+export async function push(env, title, msg, prio = 3, tags = '') {
+  try { let t = await env.STATE.get('pushTopic'); if (!t) { t = 'lernbot-' + crypto.randomUUID().slice(0, 13); await env.STATE.put('pushTopic', t); }
+    await fetch('https://ntfy.sh/' + t, { method: 'POST', body: msg.slice(0, 3000), headers: { Title: encodeURIComponent(title).length === title.length ? title : title.normalize('NFKD').replace(/[^\x20-\x7e]/g, ''), Priority: String(prio), Tags: tags, Click: 'https://kontaktmatthofstetter-wq.github.io/Meme/maxbot-cloud.html' } });
+  } catch (e) { }
+}
 export function freshKI(now) { return { start: 1000, cash: 1000, pos: {}, closed: [], eqH: [[now, 1000]], peak: 1000, t0: now, dec: [], fundRate: {}, lastFund: now, n: 0, win: 0 }; }
 export function eqPos(p, px) { const ex = px * (1 - p.side * SLIP); return Math.max(0, p.margin + p.side * (ex - p.entry) * p.qty - ex * p.qty * FFEE - p.fund); }
 export function eqKI(K, P) { let s = K.cash; for (const c in K.pos) s += eqPos(K.pos[c], P[c] || K.pos[c].entry); return s; }
@@ -44,6 +49,7 @@ function execute(K, d, P, T, now, notes) {
     return;
   }
   const sd = /long|kauf/.test(a) ? 1 : /short/.test(a) ? -1 : 0; if (!sd) return;
+  if (sd > 0 && (K.blockLong || 0) > now) { notes.push(`${c}: Crash-Schutz aktiv – keine neuen Longs`); return; }
   if (cur && cur.side === sd) return execute(K, { ...d, aktion: 'halten' }, P, T, now, notes);
   if (cur) closeKI(K, c, 'Seitenwechsel', px, now);
   const eq = eqKI(K, P); let lev = Math.max(1, Math.min(MAXLEV, Math.round(+d.hebel || 1))), mPct = Math.max(1, Math.min(MAXONE * 100, +d.einsatz || 5)) / 100;
@@ -148,7 +154,9 @@ Antworte in genau diesem JSON-Format:
  "faktoren":[{"name":"z.B. Angst-Index 11","wirkung":"positiv|negativ|neutral","warum":"kurz"}],
  "coins":{"BTC":{"richtung":"steigt|fällt|seitwärts","sicherheit":0-100,"gruende":["...","..."],"news":[Nummern]}, "ETH":{...}, "SOL":{...}, "BNB":{...}, "XRP":{...}, "DOGE":{...}},
  "entscheidungen":[{"coin":"BTC","aktion":"long|short|halten|schliessen","hebel":1-10,"einsatz":1-25,"stop":Preis,"ziel":Preis,"sicherheit":0-100,"grund":"2-3 Sätze, warum genau jetzt"}],
- "risiken":["was deine Einschätzung kippen könnte"]}
+ "risiken":["was deine Einschätzung kippen könnte"],
+ "crashRisiko":0-100,"crashGruende":["warum ein starker Absturz (mehr als 15 % in wenigen Tagen) gerade wahrscheinlicher oder unwahrscheinlicher ist"],"notfall":false}
+"crashRisiko": deine ehrliche Schätzung, wie wahrscheinlich ein Crash in den nächsten Tagen ist (50 = deutlich erhöht, 80+ = akute Gefahr). "notfall": nur true, wenn JETZT etwas Schwerwiegendes passiert (z. B. große Börse stellt Auszahlungen ein, riesiger Hack, Panikverkauf läuft) – dann werden sofort alle Longs geschlossen.
 "faktoren": die 6-10 wichtigsten Einflüsse. "entscheidungen": nur Coins, bei denen du etwas tust oder eine offene Position hältst (bei halten darfst du Stop/Ziel anpassen). Leere Liste ist erlaubt.`;
 
 export async function kiStep(env, S, getJSON, now) {
@@ -191,8 +199,15 @@ async function decide(env, S, X, now, alarm) {
     for (const c of COINS) { const o = out.coins && out.coins[c]; if (!o) continue; const dir = /steig/i.test(o.richtung) ? 'steigt' : /f[äa]ll/i.test(o.richtung) ? 'fällt' : 'seitwärts';
       fc.coins[c] = { richtung: dir, sicherheit: Math.max(0, Math.min(100, Math.round(+o.sicherheit || 0))), gruende: (o.gruende || []).slice(0, 4).map(s => String(s).replace(/^\s*\(?Schlagzeile\s*\[?\d+\]?\)?\s*:?\s*/i, '').slice(0, 240)),
         news: (o.news || []).map(i => news[+i]).filter(Boolean).slice(0, 3).map(n => n.title), px: P[c], tech: X.tech && X.tech[c] ? { ch1: X.tech[c].h24, ch7: X.tech[c].d7, rsi: X.tech[c].rsiTag, trend: X.tech[c].trendTag } : null }; }
+    const cr = Math.max(0, Math.min(100, Math.round(+out.crashRisiko || 0)));
+    S.risk = { v: cr, gruende: (out.crashGruende || []).slice(0, 5).map(x => String(x).slice(0, 240)), t: now, notfall: out.notfall === true };
+    if (out.notfall === true) await crashAction(env, S, now, 3, 'KI meldet Notfall: ' + (S.risk.gruende[0] || fc.markt.slice(0, 160)));
+    else if (cr >= 75) await crashAction(env, S, now, 2, `KI schätzt das Crash-Risiko auf ${cr} %: ${S.risk.gruende[0] || ''}`);
     const decs = Array.isArray(out.entscheidungen) ? out.entscheidungen.slice(0, 6) : [];
+    const before = JSON.stringify(Object.keys(K.pos).map(c => c + K.pos[c].side));
     for (const d of decs) execute(K, d, P, X.tech || {}, now, notes);
+    const tr = notes.filter(x => /LONG|SHORT|geschlossen/.test(x));
+    if (tr.length && JSON.stringify(Object.keys(K.pos).map(c => c + K.pos[c].side)) !== before) await push(env, 'KI-Trader: neuer Trade', tr.join('\n') + '\n\n' + fc.markt.slice(0, 300), 3, 'chart_with_upwards_trend');
     K.dec.unshift({ t: now, alarm: alarm || null, lage: fc.markt, ent: decs.map(d => ({ coin: d.coin, aktion: d.aktion, hebel: d.hebel, einsatz: d.einsatz, stop: d.stop, ziel: d.ziel, grund: String(d.grund || '').slice(0, 400) })), notes });
     if (K.dec.length > 40) K.dec.length = 40;
     if (!alarm && (slot % 3 === 0 || !N.fc)) for (const c in fc.coins) if (P[c]) N.open.push({ t: now, c, richtung: fc.coins[c].richtung, sicherheit: fc.coins[c].sicherheit, px: P[c] });
@@ -207,6 +222,40 @@ async function decide(env, S, X, now, alarm) {
   return !!out;
 }
 
+/* ---------- Crash-Schutz ---------- */
+// Stufe 2 = Warnung (Push, KI-Longs eng absichern, 4 h keine neuen KI-Longs)
+// Stufe 3 = Crash (alle Longs beider Bots schließen, Shorts absichern, 12 h keine neuen Longs, dringende Push-Nachricht)
+export async function crashAction(env, S, now, lvl, why) {
+  const C = S.crash = S.crash || { lvl: 0, log: [] };
+  if (C.cool && C.cool[lvl] > now) return;
+  C.cool = C.cool || {}; C.cool[lvl] = now + (lvl === 3 ? 6 : 3) * 3600e3; C.lvl = lvl; C.t = now; C.why = why;
+  const K = S.ki, P = S.px; let txt = '';
+  if (lvl >= 3) {
+    let n = 0; for (const c in { ...K.pos }) { const p = K.pos[c]; if (p.side > 0) { closeKI(K, c, 'Crash-Schutz', P[c] || p.entry, now); n++; } else if (P[c] < p.entry) p.sl = Math.min(p.sl, p.entry); }
+    K.blockLong = now + 12 * 3600e3; const m = S.crashRegel ? emergency(S, now, why, 12) : 0;
+    txt = `KI-Trader: ${n} Long-Positionen geschlossen, Shorts mit Stop auf Einstieg abgesichert, 12 Stunden keine neuen Longs.` + (S.crashRegel ? ` Regel-Bot: ${m} Longs geschlossen.` : ' Regel-Bot: nur gewarnt (im Rückblick hat Zwangsverkaufen ihm geschadet), seine Stops schützen ihn.');
+    await push(env, 'CRASH-SCHUTZ AKTIV', `${why}\n\n${txt}`, 5, 'rotating_light');
+  } else {
+    let n = 0; for (const c in K.pos) { const p = K.pos[c]; if (p.side > 0 && P[c]) { const ns = P[c] * 0.985; if (ns > p.sl) { p.sl = ns; n++; } } }
+    K.blockLong = Math.max(K.blockLong || 0, now + 4 * 3600e3);
+    txt = `KI-Longs eng abgesichert (${n}), 4 Stunden keine neuen KI-Longs. Die KI wägt sofort neu ab.`;
+    await push(env, 'Markt-Warnung', `${why}\n\n${txt}`, 4, 'warning');
+  }
+  C.log.unshift({ t: now, lvl, why, txt }); if (C.log.length > 50) C.log.length = 50;
+}
+export async function crashCheck(env, S, now) {
+  S.pxH = S.pxH || []; S.pxH.push([now, { ...S.px }]); while (S.pxH.length && S.pxH[0][0] < now - 65 * 60e3) S.pxH.shift();
+  S.pxL = S.pxL || []; if (!S.pxL.length || now - S.pxL[S.pxL.length - 1][0] >= 15 * 60e3) S.pxL.push([now, { ...S.px }]); while (S.pxL.length && S.pxL[0][0] < now - 25 * 3600e3) S.pxL.shift();
+  const at = (arr, m) => { let b = null; for (const [t, p] of arr) if (t <= now - m * 60e3 + 120e3) b = p; return b; };
+  const h1 = at(S.pxH, 60), h4 = at(S.pxL, 240), h24 = at(S.pxL, 1440), ch = (o, c) => o && o[c] && S.px[c] ? pct(S.px[c], o[c]) : 0;
+  const b1 = ch(h1, 'BTC'), b4 = ch(h4, 'BTC'), b24 = ch(h24, 'BTC');
+  const n1 = COINS.filter(c => ch(h1, c) <= -8).length, n4 = COINS.filter(c => ch(h4, c) <= -12).length;
+  S.crashInfo = { b1: r1(b1), b4: r1(b4), b24: r1(b24), t: now };
+  if (b1 <= -6 || b4 <= -9 || n1 >= 4 || n4 >= 4) return crashAction(env, S, now, 3, `Crash erkannt: BTC ${r1(b1)} % in 1 h, ${r1(b4)} % in 4 h${n4 >= 4 ? `, ${n4} Coins über −12 % in 4 h` : ''}`);
+  if (b1 <= -3.5 || b4 <= -6 || b24 <= -10) return crashAction(env, S, now, 2, `Starker Abverkauf: BTC ${r1(b1)} % in 1 h, ${r1(b4)} % in 4 h, ${r1(b24)} % in 24 h`);
+  if (S.crash && S.crash.lvl && now - (S.crash.t || 0) > 6 * 3600e3) S.crash.lvl = 0;   // wieder ruhig
+}
+
 /* ---------- Alarm: nichts Wichtiges verpassen ---------- */
 // Alle 5 Min: Kurssprünge. Alle 10 Min: Eilmeldungen und Liquidationswellen. Bei Alarm sofort abwägen.
 const BREAK = /\b(hack\w*|exploit\w*|etf\w*|sec|ban\w*|approv\w*|fed|powell|rate (cut|hike)\w*|crash\w*|plunge\w*|surge\w*|soar\w*|record|liquidat\w*|bankrupt\w*|lawsuit\w*|tariff\w*|war|sanction\w*|halt\w*|delist\w*|listing|emergency|breaking|collapse\w*|seiz\w*|arrest\w*|cpi|inflation)\b/i;
@@ -214,7 +263,7 @@ const ALARM_MAX = 10, ALARM_GAP = 20 * 60e3;
 export async function alarmCheck(env, S, getJSON, now) {
   const A = S.alarm = S.alarm || { day: '', n: 0, last: 0, seen: [], log: [], cool: {}, liqAvg: {} };
   const day = new Date(now).toISOString().slice(0, 10); if (A.day !== day) { A.day = day; A.n = 0; }
-  S.pxH = S.pxH || []; S.pxH.push([now, { ...S.px }]); while (S.pxH.length && S.pxH[0][0] < now - 65 * 60e3) S.pxH.shift();
+  S.pxH = S.pxH || [];
   const why = [], coolOk = k => !(A.cool[k] > now);
   // 1) Kurssprünge (15 Min und 1 Stunde)
   const ago = m => { let best = null; for (const [t, p] of S.pxH) if (t <= now - m * 60e3 + 90e3) best = p; return best; };

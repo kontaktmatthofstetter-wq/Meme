@@ -68,6 +68,21 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 
+  <div class="card" id="crashCard">
+    <h2>🛡️ Crash-Schutz</h2>
+    <div id="crSt" class="sub">Lade…</div>
+    <div id="crRisk" style="margin-top:10px"></div>
+    <div id="crLog"></div>
+    <details style="margin-top:10px" id="pushBox"><summary style="cursor:pointer;font-weight:600">📲 Warnungen aufs Handy/iPad bekommen</summary>
+      <ol style="font-size:14px;margin:8px 0;padding-left:20px">
+        <li>Lade die kostenlose App <b>„ntfy“</b> aus dem App Store.</li>
+        <li>In der App auf <b>+</b> tippen und dieses Thema eintragen: <b id="pTopic" style="user-select:all">…</b> <button class="btn" type="button" id="pCopy">Kopieren</button></li>
+        <li>Mitteilungen erlauben. Fertig – dann auf <button class="btn" type="button" id="pTest">Test senden</button> tippen.</li>
+      </ol>
+      <p class="note">Du bekommst: 🚨 Crash-Schutz (dringend), ⚠️ Markt-Warnungen und eine Nachricht bei jedem neuen Trade des KI-Traders.</p>
+    </details>
+  </div>
+
   <div class="card">
     <h2>🧠 Seine Abwägung</h2>
     <div class="sub" id="aMeta">Die erste Abwägung kommt in den nächsten Minuten (Daten werden in 4 Schritten gesammelt).</div>
@@ -247,6 +262,18 @@ function renderDat(){const D=NW&&NW.daten;if(!D){return}const h=[];
   h.push(`<p class="note">Dazu: ${NW.news?NW.news.length:0} Schlagzeilen (unten), die Marktphase und Positionen des Regel-Bots und seine eigenen letzten Trades. Nicht dabei: On-Chain-Daten (Wallet-Bewegungen) – dafür gibt es keine kostenlose Quelle für Cloud-Server.</p>`);
   $('dat').innerHTML=h.join('');
   if(NW.fc&&NW.fc.faktoren)$('aFak').innerHTML=NW.fc.faktoren.map(f=>`<span class="chip" title="${esc(f.warum)}" style="border-color:${WK[f.wirkung]||'#444'};font-weight:600;border-radius:10px;text-align:left">${f.wirkung==='positiv'?'▲':f.wirkung==='negativ'?'▼':'•'} ${esc(f.name)}<span class="sub" style="font-weight:400"> – ${esc(f.warum)}</span></span>`).join('')}
+
+function renderCrash(){const C=S.crash||{lvl:0,log:[]},R=S.risk,now=Date.now(),I=S.crashInfo||{},bl=S.ki&&S.ki.blockLong>now;
+  const lvl=C.lvl&&now-(C.t||0)<6*3600e3?C.lvl:0;
+  $('crSt').innerHTML=(lvl===3?'<span class="chip" style="border-color:var(--down);color:var(--down)">🚨 CRASH-MODUS</span>':lvl===2?'<span class="chip" style="border-color:var(--warn);color:var(--warn)">⚠️ Warnung</span>':'<span class="chip" style="border-color:var(--up);color:var(--up)">✅ Alles ruhig</span>')
+    +` BTC: 1 h ${I.b1??'–'} % · 4 h ${I.b4??'–'} % · 24 h ${I.b24??'–'} %`+(bl?`<br>Keine neuen Longs bis ${tm(S.ki.blockLong)}.`:'')
+    +`<div class="note">Prüft alle 5 Minuten. <b>Warnung</b> (BTC −3,5 % in 1 h, −6 % in 4 h oder −10 % in 24 h, oder KI-Crash-Risiko ab 75 %): Push-Nachricht, Longs des KI-Traders eng absichern, 4 h keine neuen Longs. <b>Crash</b> (BTC −6 % in 1 h oder −9 % in 4 h, mehrere Coins gleichzeitig im freien Fall, oder die KI meldet einen Notfall wie Börsen-Pleite oder Riesen-Hack): alle Longs des KI-Traders sofort schließen, Shorts absichern, 12 h keine neuen Longs, dringende Push-Nachricht.</div>`;
+  if(R){const col=R.v>=75?'var(--down)':R.v>=50?'var(--warn)':'var(--up)';$('crRisk').innerHTML=`<div style="display:flex;justify-content:space-between"><b>Crash-Risiko laut KI</b><b style="color:${col}">${R.v} %</b></div><div class="conf"><i style="width:${R.v}%;background:${col}"></i></div><ul style="margin:4px 0;padding-left:18px;font-size:13px">${R.gruende.map(g=>`<li>${esc(g)}</li>`).join('')}</ul><div class="sub">Stand: ${tm(R.t)} · wird bei jeder Abwägung neu geschätzt</div>`}
+  else $('crRisk').innerHTML='<div class="sub">Die KI schätzt das Crash-Risiko ab der nächsten Abwägung.</div>';
+  $('crLog').innerHTML=C.log&&C.log.length?`<details><summary class="sub" style="cursor:pointer">Bisherige Auslösungen (${C.log.length})</summary>${C.log.slice(0,15).map(l=>`<div class="sub" style="margin:4px 0">${l.lvl===3?'🚨':'⚠️'} ${tm(l.t)} · ${esc(l.why)}<br>→ ${esc(l.txt)}</div>`).join('')}</details>`:''}
+async function loadPush(){try{if(!URL_)return;const r=await fetch(URL_.replace(/\/$/,'')+'/api/push');const j=await r.json();$('pTopic').textContent=j.topic}catch(e){}}
+$('pCopy').onclick=()=>{try{navigator.clipboard.writeText($('pTopic').textContent);$('pCopy').textContent='Kopiert ✓'}catch(e){}};
+$('pTest').onclick=async()=>{try{await fetch(URL_.replace(/\/$/,'')+'/api/push?test=1');$('pTest').textContent='Gesendet ✓ (max. alle 2 Min)'}catch(e){$('pTest').textContent='Fehler'}};
 function render(){if(!S||!S.vars)return;const m=eqMain();let pk=S.mainPeak||m;pk=Math.max(pk,m);
   $('eq').textContent=eur(m);const l0=S.liveEq0||m;$('live').innerHTML=`Seit Neustart (${S.live0?tm(S.live0):'–'}): <span class="${m>=l0?'up':'down'}">${m>=l0?'+':''}${eur(m-l0)} (${((m/l0-1)*100).toFixed(2).replace('.',',')} %)</span>`;
   $('dd').textContent='Rückgang vom Hoch: '+Math.round((pk-m)/pk*100)+' %';
@@ -262,7 +289,7 @@ function render(){if(!S||!S.vars)return;const m=eqMain();let pk=S.mainPeak||m;pk
   $('vt').innerHTML=Object.keys(VN).map(v=>[eqV(v),v]).sort((a,b)=>b[0]-a[0]).map(([x,v])=>{const s=sc[v];return`<tr><td><span class="sw" style="background:${VC[v]}"></span>${VN[v]}</td><td class="n ${v==='cash'?'':x>=1000?'up':'down'}">${eur0(x)}</td><td class="n">${v==='cash'?'–':s&&s.e!=null?`<span class="${s.e>0?'up':'down'}">${(s.e*10).toFixed(1).replace('.',',')}</span>`:'–'}</td><td class="n">${S.w[v]?Math.round(S.w[v]*100)+' %':'–'}</td></tr>`}).join('');
   const items=[...S.logs.map(l=>({t:l.t,h:`<b>${tm(l.t)}</b> · ${esc(l.msg)}`})),...S.ev.filter(e=>e.v!=='main'&&e.io!=='add'&&S.units[e.v]>0).slice(-60).map(e=>({t:e.t,h:e.io==='in'?`${tm(e.t)} · <b>${VN[e.v]}</b> · ${e.c} ${e.side>0?'<span class="up">LONG</span>':'<span class="down">SHORT</span>'} @ ${px(e.px)}${e.lev&&e.lev!==1?' · Hebel '+e.lev.toFixed(1).replace('.',',')+'x':''} – ${esc(e.why)}`:`${tm(e.t)} · <b>${VN[e.v]}</b> · ${e.c} raus (${esc(e.why)}) · <span class="${e.pnl>=0?'up':'down'}">${e.pct>=0?'+':''}${e.pct.toFixed(1).replace('.',',')} %</span>`}))].sort((a,b)=>b.t-a.t).slice(0,60);
   $('feed').innerHTML=items.map(i=>`<div>${i.h}</div>`).join('');
-  for(const f of [renderKI,drawK,drawEq])try{f()}catch(e){__rep(f.name+': '+(e&&e.stack||e))}}
+  for(const f of [renderCrash,renderKI,drawK,drawEq])try{f()}catch(e){__rep(f.name+': '+(e&&e.stack||e))}}
 async function pull(){try{
   if(!URL_){const r=await fetch('cloud-url.json?'+Date.now(),{cache:'no-store'});if(r.ok)URL_=(await r.json()).url}
   if(!URL_){st('err','Cloud-Bot ist noch nicht eingerichtet');return}
@@ -271,7 +298,7 @@ async function pull(){try{
   S=s;const ago=Math.round((Date.now()-S.lastRun)/60000);st(ago<=10?'ok':'err',ago<=10?`Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`Letzter Cloud-Lauf vor ${ago} Min`);try{render()}catch(e){__rep('render: '+(e&&e.stack||e))}
 }catch(e){__rep('pull: '+(e&&e.stack||e));st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
 function st(c,t){$('dot').className='dot '+c;$('st').textContent=t}
-pull().then(()=>loadK(coin)).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin]==='err')delete K[coin];loadK(coin).then(drawK)},120000);
+pull().then(()=>{loadPush();return loadK(coin)}).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin]==='err')delete K[coin];loadK(coin).then(drawK)},120000);
 new ResizeObserver(()=>{if(S){drawK();drawEq()}}).observe(document.body);
 })();
 </script>
