@@ -65,6 +65,11 @@ export async function run(env, now = Date.now()) {
   }
   for (const c in px) S.px[c] = px[c];
   fundKI(S.ki, S.px, now);
+  // Einmalig: Wochenplan sofort neu machen – nur noch Strategien, die jetzt einsteigen können
+  if (!S.reb2) {
+    let ab = 0, ok = 0; await Promise.all(COINS.map(async c => { const d = await klines(c, '1d', 210); if (!d || d.length < 201) return; ok++; const cl = d.slice(0, -1).map(x => x.c), n = cl.length - 1; let sm = 0; for (let i = n - 199; i <= n; i++) sm += cl[i]; if (cl[n] > sm / 200) ab++; }));
+    if (ok >= 4) { S.ab200 = ab; E.rebalanceNow(S, now); S.reb2 = now; S.logs.unshift({ t: now, cls: 'b', msg: `Wochenplan sofort angepasst: Geld nur noch in Strategien, die jetzt auch einsteigen können (${ab} von 6 Coins über dem 200-Tage-Schnitt).` }); }
+  }
   // 3) Ansicht für die Seite + Verlauf alle 30 Minuten
   const veq = {}; for (const v in E.VARS) veq[v] = +E.eqV(v).toFixed(2);
   S.view = { main: +E.eqMain().toFixed(2), veq, sc: E.scores(S), at: now };

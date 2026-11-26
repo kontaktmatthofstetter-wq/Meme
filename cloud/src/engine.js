@@ -18,7 +18,7 @@ export const VARS = {
   cash: { n: 'Bargeld', d: 'Nichts tun – sicherer Hafen', k: 'X' },
 };
 const VK = Object.keys(VARS);
-export const CFG = { look: 60, top: 3, cap: 0.6, smooth: 0, guard: 0, regW: 1, K: 30, minDays: 30, eqw: 0 };
+export const CFG = { can: 1, look: 60, top: 3, cap: 0.6, smooth: 0, guard: 0, regW: 1, K: 30, minDays: 30, eqw: 0 };
 export const LT = { pL: 'Rücksetzer Long', pS: 'Rücksetzer Short', bL: 'Ausbruch Long', bS: 'Ausbruch Short' };
 
 /* ---------- Indikatoren ---------- */
@@ -197,6 +197,8 @@ const regKey = r => r ? r.tr + ' · ' + r.vol : '–';
 function stepDay(D, dd) {
   const r = dd.BTC ? regimeOf(dd.BTC) : null;
   if (r) S.bull = r.bull;
+  let ab = 0; for (const c of COINS) if (dd[c] && dd[c].length > 200) { const cl = dd[c].map(x => x.c), n = cl.length - 1; if (cl[n] > sma(cl, 200, n)) ab++; }
+  S.ab200 = ab;   // wie viele Coins über ihrem 200-Tage-Schnitt liegen
   for (const c of COINS) if (dd[c] && dd[c].length > 30) { S.px[c] = dd[c][dd[c].length - 1].c; stepB(c, dd[c]); stepC(c, dd[c]); }
   // Tagesrenditen jeder Variante → kurzfristige Form + Lernen je Marktphase (Phase vom Tagesbeginn)
   const k0 = regKey(S.reg);
@@ -216,8 +218,11 @@ export function scores(st) {
     out[v] = { e: ((1 - CFG.regW) * m + CFG.regW * rm) / sd, m60: m, reg: rm, regN: o.n, sd }; }
   return out;
 }
+export function rebalanceNow(st, now) { S = st; NOW = now; rebalance(); }
 function rebalance() {
-  const sc = scores(S), cand = Object.entries(sc).filter(([, o]) => o.e != null && o.e > 0).sort((a, b) => b[1].e - a[1].e).slice(0, CFG.top);
+  // Nur Varianten, die in der jetzigen Lage überhaupt einsteigen können (sonst läge ihr Geld still)
+  const can = v => !CFG.can ? true : v === 'rsi2' ? (S.ab200 ?? 1) > 0 : v === 'mom' ? !!S.bull : true;
+  const sc = scores(S), cand = Object.entries(sc).filter(([v, o]) => o.e != null && o.e > 0 && can(v)).sort((a, b) => b[1].e - a[1].e).slice(0, CFG.top);
   let w = {}; let tot = 0; for (const [, o] of cand) tot += CFG.eqw ? 1 : o.e;
   for (const [v, o] of cand) w[v] = Math.min(CFG.cap, (CFG.eqw ? 1 : o.e) / tot);
   const m = eqMain(), dd = (S.mainPeak - m) / S.mainPeak; if (CFG.guard && dd > CFG.guard) for (const v in w) w[v] *= 0.5;
