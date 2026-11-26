@@ -2,6 +2,7 @@ name = "maxbot"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
 workers_dev = true
+account_id = "d9b0874b578293d2b5633bc961f1d08a"
 
 [triggers]
 crons = ["*/5 * * * *"]

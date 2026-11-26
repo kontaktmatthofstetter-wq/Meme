@@ -9,19 +9,28 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: d9b0874b578293d2b5633bc961f1d08a
     steps:
       - uses: actions/checkout@v4
-      - id: wr
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: cloud
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Speicher suchen oder anlegen und Bot hochladen
+        working-directory: cloud
+        run: |
+          npm i -g wrangler@4 >/dev/null 2>&1
+          findkv() { wrangler kv namespace list 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const n=JSON.parse(s).find(x=>x.title==='maxbot-state');console.log(n?n.id:'')}catch(e){console.log('')}})"; }
+          ID=$(findkv)
+          if [ -z "$ID" ]; then wrangler kv namespace create maxbot-state; ID=$(findkv); fi
+          echo "Speicher: $ID"; test -n "$ID"
+          sed -i "s/^id = .*/id = \"$ID\"/" wrangler.toml
+          wrangler deploy 2>&1 | tee deploy.log
+          grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1 > url.txt
+          test -s url.txt
       - name: Adresse für die Seite speichern
         run: |
-          URL="${{ steps.wr.outputs.deployment-url }}"
-          if [ -z "$URL" ]; then URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' <<< "${{ steps.wr.outputs.command-output }}" | head -1); fi
-          echo "{\"url\":\"$URL\"}" > cloud-url.json
-          cat cloud-url.json
+          echo "{\"url\":\"$(cat cloud/url.txt)\"}" > cloud-url.json; cat cloud-url.json
           git config user.name "maxbot-deploy"; git config user.email "actions@github.com"
           git add cloud-url.json
           git diff --cached --quiet || (git commit -m "Cloud-Adresse des Max-Bots" && git push)
