@@ -33,6 +33,7 @@ export async function run(env, now = Date.now()) {
     S.mainI = []; S.live0 = now; S.liveEq0 = null;
   }
   E.bind(S);
+  const ev0 = S.ev.length ? S.ev[S.ev.length - 1].t : 0, kc0 = S.ki && S.ki.closed.length ? S.ki.closed[0].t : 0;
   if (!S.ki) {   // Neustart auf Wunsch: KI-Trader mit 1.000 €, Lern-Bot ebenfalls auf 1.000 € (Erfahrung bleibt)
     S.ki = freshKI(now); const m = E.eqMain(); const f = 1000 / m; for (const v in S.units) S.units[v] *= f;
     S.mainD = []; S.mainI = []; S.mainPeak = 1000; S.liveEq0 = 1000; S.live0 = now; S.resetAt = now;
@@ -80,6 +81,17 @@ export async function run(env, now = Date.now()) {
   if (!did && !caught) { try { await alarmCheck(env, S, getJSON, now); } catch (e) { S.kiErr = 'Alarm: ' + String(e && e.stack || e).slice(0, 400); } }
   const ke = eqKI(S.ki, S.px); S.ki.peak = Math.max(S.ki.peak, ke); S.ki.eq = +ke.toFixed(2);
   if (now - S.ki.eqH[S.ki.eqH.length - 1][0] >= 30 * 60e3) { S.ki.eqH.push([now, S.ki.eq]); if (S.ki.eqH.length > 3000) S.ki.eqH.shift(); }
+  // Push-Nachrichten: Trades des Regel-Bots (nur Varianten, in denen Geld steckt) und Stop/Ziel/Liquidation beim KI-Trader
+  try {
+    const f = x => x >= 1000 ? x.toFixed(0) : x >= 1 ? x.toFixed(2) : x.toFixed(4), lines = [];
+    for (const e of S.ev) { if (e.t <= ev0 || e.v === 'main' || !(S.units[e.v] > 0) || (e.io !== 'in' && e.io !== 'out')) continue;
+      const nm = E.VARS[e.v] ? E.VARS[e.v].n : e.v;
+      lines.push(e.io === 'in' ? `${e.c} ${e.side > 0 ? 'LONG' : 'SHORT'} @ ${f(e.px)}${e.lev && e.lev !== 1 ? ' · Hebel ' + e.lev.toFixed(1) + 'x' : ''} (${nm}) – ${e.why}`
+        : `${e.c} raus @ ${f(e.px)} (${nm}) · ${e.pct >= 0 ? '+' : ''}${e.pct.toFixed(1)} % – ${e.why}`); }
+    if (lines.length) await push(env, 'Regel-Bot: Trade', lines.slice(0, 8).join('\n'), 3, 'robot');
+    const kl = (S.ki ? S.ki.closed : []).filter(t => t.t > kc0 && /Stop|Ziel|Liquid|Crash/.test(t.why));
+    if (kl.length) await push(env, 'KI-Trader: Trade geschlossen', kl.map(t => `${t.c} ${t.side > 0 ? 'Long' : 'Short'} ${t.lev}x: ${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} € (${t.pct >= 0 ? '+' : ''}${t.pct} %) – ${t.why}`).join('\n'), 3, kl.some(t => t.pnl < 0) ? 'red_circle' : 'green_circle');
+  } catch (e) { }
   S.lastRun = now;
   await env.STATE.put('state', JSON.stringify(S));
   return S;
