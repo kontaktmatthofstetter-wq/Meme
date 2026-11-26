@@ -152,6 +152,8 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
   <p class="note">Spielgeld, kein echtes Geld. Gebühren, Rutsch und Hebel-Zinsen sind eingerechnet. Der Bot kennt nur die Vergangenheit – Gewinne sind nicht garantiert.</p>
 </div>
 <script>
+window.__err=[];function __rep(m){try{const x=String(m).slice(0,1400);if(window.__err.includes(x))return;window.__err.push(x);const st=document.getElementById('st');if(st)st.textContent='Anzeige-Fehler: '+x.slice(0,160);fetch('https://maxbot.kontakt-matthofstetter.workers.dev/api/clog',{method:'POST',body:x})}catch(e){}}
+window.addEventListener('error',e=>__rep((e.message||'')+' @'+(e.lineno||'')+':'+(e.colno||'')+' '+(e.error&&e.error.stack||'')));
 (()=>{
 const $=id=>document.getElementById(id),COINS=['BTC','ETH','SOL','BNB','XRP','DOGE'];
 const VN={trend:'Trend normal',max:'Trend Max',long:'Nur Long',short:'Nur Short',learn:'Selbstlernend',rsi2:'RSI-2 Rücksetzer',mom:'Momentum',cash:'Bargeld'};
@@ -183,13 +185,12 @@ function drawK(){const ks=K[coin];if(!ks||ks==='err'||!S){const[g,W,H]=cv('cK');
     if(e.io==='in'){g.fillStyle=e.side>0?'#22c55e':'#ef4444';g.fillText(e.side>0?'▲':'▼',X,e.side>0?Y+14:Y-4)}else if(e.io==='add'){g.fillStyle='#5aa8ff';g.fillText('◆',X,Y+4)}else{g.fillStyle=e.pnl>=0?'#22c55e':'#ef4444';g.beginPath();g.arc(X,Y,4,0,7);g.fill()}}
   g.globalAlpha=1;g.textAlign='start';
   // KI-Trader: Einstiege, Ausstiege, offene Linien (blau umrandet, mit „KI“)
-  const K=S.ki;if(K){const mk=(t,pr,txt,col)=>{const X=xt(t),Y=y(pr);if(X<0||X>W-R||Y<0||Y>H)return;g.fillStyle=col;g.font='bold 15px Inter,sans-serif';g.textAlign='center';g.fillText(txt,X,Y+5);g.font='bold 9px Inter,sans-serif';g.fillStyle='#5aa8ff';g.fillText('KI',X,Y-9);g.textAlign='start'};
-    for(const t of K.closed)if(t.c===coin){if(t.t0>=t0)mk(t.t0,t.entry,t.side>0?'▲':'▼',t.side>0?'#22c55e':'#ef4444');if(t.t>=t0)mk(t.t,t.exit,'●',t.pnl>=0?'#22c55e':'#ef4444')}
-    const p=K.pos[coin];if(p){if(p.t>=t0)mk(p.t,p.entry,p.side>0?'▲':'▼',p.side>0?'#22c55e':'#ef4444');g.setLineDash([6,4]);for(const [v,col,lb] of [[p.entry,'#5aa8ff','KI Einstieg '+p.lev+'x'],[p.sl,'#ef4444','KI Stop'],[p.tp,'#22c55e','KI Ziel']]){if(!v||v<lo||v>hi)continue;g.strokeStyle=col;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle=col;g.font='11px Inter,sans-serif';g.fillText(lb,W-R-110,y(v)-4)}g.setLineDash([])}}
+  const KI=S.ki;if(KI){const mk=(t,pr,txt,col)=>{const X=xt(t),Y=y(pr);if(X<0||X>W-R||Y<0||Y>H)return;g.fillStyle=col;g.font='bold 15px Inter,sans-serif';g.textAlign='center';g.fillText(txt,X,Y+5);g.font='bold 9px Inter,sans-serif';g.fillStyle='#5aa8ff';g.fillText('KI',X,Y-9);g.textAlign='start'};
+    for(const t of KI.closed)if(t.c===coin){if(t.t0>=t0)mk(t.t0,t.entry,t.side>0?'▲':'▼',t.side>0?'#22c55e':'#ef4444');if(t.t>=t0)mk(t.t,t.exit,'●',t.pnl>=0?'#22c55e':'#ef4444')}
+    const p=KI.pos[coin];if(p){if(p.t>=t0)mk(p.t,p.entry,p.side>0?'▲':'▼',p.side>0?'#22c55e':'#ef4444');g.setLineDash([6,4]);for(const [v,col,lb] of [[p.entry,'#5aa8ff','KI Einstieg '+p.lev+'x'],[p.sl,'#ef4444','KI Stop'],[p.tp,'#22c55e','KI Ziel']]){if(!v||v<lo||v>hi)continue;g.strokeStyle=col;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle=col;g.font='11px Inter,sans-serif';g.fillText(lb,W-R-110,y(v)-4)}g.setLineDash([])}}
   g.font='11px Inter,sans-serif';g.fillStyle='#8a8a8a';g.fillText(coin+'/USDT · 4-Stunden-Kerzen · blasse Zeichen = Regel-Bot',4,H-3)}
-function drawEq(){const[g,W,H]=cv('cEq'),R=58,a=[...S.mainD,...(S.mainI||[]).filter(p=>p[0]>(S.mainD.length?S.mainD[S.mainD.length-1][0]:0))];if(a.length<2)return;
-  let lo=Infinity,hi=-Infinity;for(const p of a){lo=Math.min(lo,p[1]);hi=Math.max(hi,p[1])}lo=Math.min(lo,900);const t0=a[0][0],t1=a[a.length-1][0],x=t=>(t-t0)/(t1-t0)*(W-R),y=v=>H-16-(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo))*(H-26);
-  g.font='11px Inter,sans-serif';g.strokeStyle='#1f1f1f';g.fillStyle='#8a8a8a';for(const v of [1000,2000,5000,10000,20000,50000,100000]){if(v<lo||v>hi)continue;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillText((v/1000)+'k €',W-R+4,y(v)+4)}
+function drawEq(){const[g,W,H]=cv('cEq'),R=58,a=[...S.mainD,...(S.mainI||[]).filter(p=>p[0]>(S.mainD.length?S.mainD[S.mainD.length-1][0]:0))];if(a.length<2){g.fillStyle='#8a8a8a';g.font='14px Inter,sans-serif';g.fillText('Kurve erscheint nach der ersten halben Stunde seit dem Neustart.',12,30);return}  let lo=Infinity,hi=-Infinity;for(const p of a){lo=Math.min(lo,p[1]);hi=Math.max(hi,p[1])}lo=Math.min(lo,990);hi=Math.max(hi,1010);const t0=a[0][0],t1=a[a.length-1][0],x=t=>(t-t0)/(t1-t0)*(W-R),y=v=>H-16-(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo))*(H-26);
+  g.font='11px Inter,sans-serif';g.strokeStyle='#1f1f1f';g.fillStyle='#8a8a8a';for(const v of [lo,1000,hi]){g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillText(Math.round(v).toLocaleString('de-DE')+' €',W-R+4,y(v)+4)}
   let py=new Date(t0).getUTCFullYear();for(const p of a){const Y=new Date(p[0]).getUTCFullYear();if(Y!==py){g.fillStyle='#333';g.fillRect(x(p[0]),0,1,H-14);g.fillStyle='#8a8a8a';g.fillText(Y,x(p[0])+2,H-2);py=Y}}
   g.strokeStyle='#22c55e';g.lineWidth=2;g.beginPath();a.forEach((p,i)=>i?g.lineTo(x(p[0]),y(p[1])):g.moveTo(0,y(p[1])));g.stroke();g.lineWidth=1;
   if(S.live0){g.strokeStyle='#5aa8ff';g.setLineDash([4,4]);g.beginPath();g.moveTo(x(S.live0),0);g.lineTo(x(S.live0),H-14);g.stroke();g.setLineDash([]);g.fillStyle='#5aa8ff';g.fillText('live ab hier',Math.min(x(S.live0)-62,W-R-62),12)}}
@@ -261,14 +262,14 @@ function render(){if(!S||!S.vars)return;const m=eqMain();let pk=S.mainPeak||m;pk
   $('vt').innerHTML=Object.keys(VN).map(v=>[eqV(v),v]).sort((a,b)=>b[0]-a[0]).map(([x,v])=>{const s=sc[v];return`<tr><td><span class="sw" style="background:${VC[v]}"></span>${VN[v]}</td><td class="n ${v==='cash'?'':x>=1000?'up':'down'}">${eur0(x)}</td><td class="n">${v==='cash'?'–':s&&s.e!=null?`<span class="${s.e>0?'up':'down'}">${(s.e*10).toFixed(1).replace('.',',')}</span>`:'–'}</td><td class="n">${S.w[v]?Math.round(S.w[v]*100)+' %':'–'}</td></tr>`}).join('');
   const items=[...S.logs.map(l=>({t:l.t,h:`<b>${tm(l.t)}</b> · ${esc(l.msg)}`})),...S.ev.filter(e=>e.v!=='main'&&e.io!=='add'&&S.units[e.v]>0).slice(-60).map(e=>({t:e.t,h:e.io==='in'?`${tm(e.t)} · <b>${VN[e.v]}</b> · ${e.c} ${e.side>0?'<span class="up">LONG</span>':'<span class="down">SHORT</span>'} @ ${px(e.px)}${e.lev&&e.lev!==1?' · Hebel '+e.lev.toFixed(1).replace('.',',')+'x':''} – ${esc(e.why)}`:`${tm(e.t)} · <b>${VN[e.v]}</b> · ${e.c} raus (${esc(e.why)}) · <span class="${e.pnl>=0?'up':'down'}">${e.pct>=0?'+':''}${e.pct.toFixed(1).replace('.',',')} %</span>`}))].sort((a,b)=>b.t-a.t).slice(0,60);
   $('feed').innerHTML=items.map(i=>`<div>${i.h}</div>`).join('');
-  renderKI();drawK();drawEq()}
+  for(const f of [renderKI,drawK,drawEq])try{f()}catch(e){__rep(f.name+': '+(e&&e.stack||e))}}
 async function pull(){try{
   if(!URL_){const r=await fetch('cloud-url.json?'+Date.now(),{cache:'no-store'});if(r.ok)URL_=(await r.json()).url}
   if(!URL_){st('err','Cloud-Bot ist noch nicht eingerichtet');return}
   const r=await fetch(URL_.replace(/\/$/,'')+'/api/state?'+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;const s=await r.json();
   if(!s.vars){st('wait','Cloud-Bot startet – erster Lauf kommt in höchstens 5 Minuten');return}
-  S=s;const ago=Math.round((Date.now()-S.lastRun)/60000);st(ago<=10?'ok':'err',ago<=10?`Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`Letzter Cloud-Lauf vor ${ago} Min`);try{render()}catch(e){console.error('Anzeige-Fehler',e&&e.stack||e)}
-}catch(e){console.error('Abruf-Fehler',e&&e.stack||e);st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
+  S=s;const ago=Math.round((Date.now()-S.lastRun)/60000);st(ago<=10?'ok':'err',ago<=10?`Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`Letzter Cloud-Lauf vor ${ago} Min`);try{render()}catch(e){__rep('render: '+(e&&e.stack||e))}
+}catch(e){__rep('pull: '+(e&&e.stack||e));st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
 function st(c,t){$('dot').className='dot '+c;$('st').textContent=t}
 pull().then(()=>loadK(coin)).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin]==='err')delete K[coin];loadK(coin).then(drawK)},120000);
 new ResizeObserver(()=>{if(S){drawK();drawEq()}}).observe(document.body);

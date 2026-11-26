@@ -106,6 +106,12 @@ export default {
       const out = await Promise.all(L.map(async x => { try { const r = await fetch(x, { headers: { 'user-agent': 'Mozilla/5.0 Lern-Bot' } }); const t = await r.text(); return [x, r.status, t.slice(0, 160)]; } catch (e) { return [x, 0, String(e)]; } }));
       return new Response(JSON.stringify({ colo: req.cf && req.cf.colo, out }, null, 1), { headers: CORS });
     }
+    if (u.pathname === '/api/clog') {   // Anzeige-Fehler der Seite sammeln (zur Fehlersuche)
+      if (req.method === 'POST') { const t = (await req.text()).slice(0, 1500); const old = JSON.parse(await env.STATE.get('clog') || '[]');
+        if (!old.length || Date.now() - old[0].t > 30e3) { old.unshift({ t: Date.now(), ua: (req.headers.get('user-agent') || '').slice(0, 160), msg: t }); await env.STATE.put('clog', JSON.stringify(old.slice(0, 20))); } return new Response('{}', { headers: CORS }); }
+      return new Response(await env.STATE.get('clog') || '[]', { headers: CORS });
+    }
+    if (req.method === 'OPTIONS') return new Response(null, { headers: { ...CORS, 'access-control-allow-methods': 'GET,POST', 'access-control-allow-headers': 'content-type' } });
     if (u.pathname === '/api/news') { const s = await env.STATE.get('news'); return new Response(s || '{}', { headers: CORS }); }
     if (u.pathname === '/api/k') {   // Kerzen für die Seite (falls Binance im Browser nicht lädt)
       const c = u.searchParams.get('c'), iv = u.searchParams.get('i') === '1d' ? '1d' : '4h'; if (!COINS.includes(c)) return new Response('[]', { status: 400, headers: CORS });
