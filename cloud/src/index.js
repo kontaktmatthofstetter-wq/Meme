@@ -82,6 +82,17 @@ export default {
   async fetch(req, env) {
     const u = new URL(req.url);
     if (u.pathname === '/api/state') { const s = await env.STATE.get('state'); return new Response(s || '{}', { headers: CORS }); }
+    if (u.pathname === '/api/probe') {   // prüft, welche Datenquellen aus der Cloud erreichbar sind
+      const L = ['https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT', 'https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=2',
+        'https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1h&limit=2', 'https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=BTCUSDT&period=1h&limit=2',
+        'https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP', 'https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=BTC&period=1H',
+        'https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-volume?ccy=BTC&period=1H', 'https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT',
+        'https://api.alternative.me/fng/?limit=2', 'https://nfs.faireconomy.media/ff_calendar_thisweek.json', 'https://api.coingecko.com/api/v3/global',
+        'https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=5d&interval=1d', 'https://stooq.com/q/l/?s=%5Espx&f=sd2t2ohlcv&h&e=csv',
+        'https://data-api.binance.vision/api/v3/depth?symbol=BTCUSDT&limit=100', 'https://api.coinbase.com/v2/prices/BTC-USD/spot', 'https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&uly=BTC-USDT&state=filled'];
+      const out = await Promise.all(L.map(async x => { try { const r = await fetch(x, { headers: { 'user-agent': 'Mozilla/5.0 Lern-Bot' } }); const t = await r.text(); return [x, r.status, t.slice(0, 160)]; } catch (e) { return [x, 0, String(e)]; } }));
+      return new Response(JSON.stringify({ colo: req.cf && req.cf.colo, out }, null, 1), { headers: CORS });
+    }
     if (u.pathname === '/api/news') { const s = await env.STATE.get('news'); return new Response(s || '{}', { headers: CORS }); }
     if (u.pathname === '/api/k') {   // Kerzen für die Seite (falls Binance im Browser nicht lädt)
       const c = u.searchParams.get('c'), iv = u.searchParams.get('i') === '1d' ? '1d' : '4h'; if (!COINS.includes(c)) return new Response('[]', { status: 400, headers: CORS });
