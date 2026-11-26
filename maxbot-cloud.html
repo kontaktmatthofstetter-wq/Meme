@@ -144,7 +144,10 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
   <div class="card">
     <h2>Kerzen & Einstiege</h2>
     <div class="tabs" id="cTabs"></div>
-    <canvas id="cK" height="280" style="height:280px"></canvas>
+    <div class="tabs" id="tfTabs"><button class="btn" type="button" data-tf="1h">1 Std</button><button class="btn on" type="button" data-tf="4h">4 Std</button><button class="btn" type="button" data-tf="1d">1 Tag</button>
+      <span style="flex:1"></span><button class="btn" type="button" id="kOld" aria-label="Weiter in die Vergangenheit">◀</button><button class="btn" type="button" id="kNew" aria-label="Richtung Jetzt">▶</button><button class="btn" type="button" id="kNow">Jetzt</button><button class="btn" type="button" id="kOut" aria-label="Mehr Zeit zeigen">−</button><button class="btn" type="button" id="kIn" aria-label="Weniger Zeit zeigen">+</button></div>
+    <canvas id="cK" height="320" style="height:320px;touch-action:pan-y;cursor:grab"></canvas>
+    <div class="sub" style="text-align:center;margin-top:4px">👆 Nach rechts wischen = Vergangenheit · mit zwei Fingern zoomen</div>
     <div class="legend"><span>▲ Long / Kauf</span><span>▼ Short</span><span>◆ Nachkauf</span><span><span class="sw" style="background:var(--up)"></span>Ausstieg mit Gewinn</span><span><span class="sw" style="background:var(--down)"></span>Ausstieg mit Verlust</span><span>- - Einstieg / Stop</span></div>
   </div>
 
@@ -185,28 +188,52 @@ function eqA(a,c){if(!a.pos)return a.cash;const p=a.pos,pr=P(c)||p.mid;if(p.kind
 const eqV=v=>COINS.reduce((s,c)=>s+eqA(S.vars[v].acc[c],c),0);
 const eqMain=()=>Object.keys(S.vars).reduce((s,v)=>s+S.units[v]*eqV(v),0);
 $('cTabs').innerHTML=COINS.map(c=>`<button class="btn${c===coin?' on':''}" type="button" data-c="${c}">${c}</button>`).join('');
-$('cTabs').onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;coin=b.dataset.c;for(const x of $('cTabs').children)x.classList.toggle('on',x.dataset.c===coin);loadK(coin).then(drawK)};
+$('cTabs').onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;coin=b.dataset.c;OFF=0;for(const x of $('cTabs').children)x.classList.toggle('on',x.dataset.c===coin);drawK();loadK(coin).then(drawK)};
+$('tfTabs').onclick=e=>{const b=e.target.closest('[data-tf]');if(!b)return;TF=b.dataset.tf;OFF=0;VIS=0;for(const x of $('tfTabs').querySelectorAll('[data-tf]'))x.classList.toggle('on',x===b);drawK();loadK(coin).then(drawK)};
+$('kOld').onclick=()=>{OFF+=Math.round(VIS*0.6);drawK()};$('kNew').onclick=()=>{OFF-=Math.round(VIS*0.6);drawK()};$('kNow').onclick=()=>{OFF=0;drawK()};
+$('kOut').onclick=()=>{VIS*=1.5;drawK()};$('kIn').onclick=()=>{VIS/=1.5;drawK()};
+{const c=$('cK'),pts=new Map();let o0=0,x0=0,v0=0,d0=0;
+  const cwNow=()=>(c.clientWidth-64)/Math.max(1,VIS);
+  c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);pts.set(e.pointerId,e.clientX);o0=OFF;x0=e.clientX;v0=VIS;if(pts.size===2){const a=[...pts.values()];d0=Math.abs(a[0]-a[1])||1}});
+  c.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,e.clientX);
+    if(pts.size>=2){const a=[...pts.values()],d=Math.abs(a[0]-a[1])||1;VIS=v0*d0/d;drawK();return}
+    OFF=o0+(e.clientX-x0)/cwNow();drawK()});
+  const up=e=>{pts.delete(e.pointerId);if(pts.size===1){o0=OFF;x0=[...pts.values()][0];v0=VIS}};
+  c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
+  c.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){e.preventDefault();OFF-=e.deltaX/cwNow();drawK()}},{passive:false})}
+
 function cv(id){const c=$(id),r=devicePixelRatio||1,w=c.clientWidth;if(!c.dataset.h)c.dataset.h=c.getAttribute('height');const h=+c.dataset.h;c.style.height=h+'px';c.width=w*r;c.height=h*r;const g=c.getContext('2d');g.setTransform(r,0,0,r,0,0);return[g,w,h]}
-async function loadK(c){const srcs=[...(URL_?[URL_.replace(/\/$/,'')+`/api/k?c=${c}&`]:[]),...['https://data-api.binance.vision','https://api.binance.com'].map(b=>`${b}/api/v3/klines?symbol=${c}USDT&interval=4h&limit=120&`)];for(const b of srcs){try{const r=await fetch(b+'x='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();if(!j.length)continue;K[c]=j.map(k=>({t:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4]}));live[c]=K[c][K[c].length-1].c;return}}catch(e){}}K[c]=K[c]||'err'}
+let TF='4h',VIS=0,OFF=0;const STEP={'1h':3600e3,'4h':4*3600e3,'1d':864e5};
+async function loadK(c,tf){tf=tf||TF;const key=c+tf,srcs=[...(URL_?[URL_.replace(/\/$/,'')+`/api/k?c=${c}&i=${tf}&n=600&`]:[]),...['https://data-api.binance.vision','https://api.binance.com'].map(b=>`${b}/api/v3/klines?symbol=${c}USDT&interval=${tf}&limit=600&`)];
+  for(const b of srcs){try{const r=await fetch(b+'x='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();if(!j.length)continue;K[key]=j.map(k=>({t:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4]}));live[c]=K[key][K[key].length-1].c;return}}catch(e){}}K[key]=K[key]||'err'}
 async function loadPx(){try{const r=await fetch('https://data-api.binance.vision/api/v3/ticker/price?symbols='+encodeURIComponent(JSON.stringify(COINS.map(c=>c+'USDT'))),{cache:'no-store'});if(r.ok)for(const x of await r.json())live[x.symbol.replace('USDT','')]=+x.price}catch(e){}}
-function drawK(){const ks=K[coin];if(!ks||ks==='err'||!S){const[g,W,H]=cv('cK');g.fillStyle='#8a8a8a';g.font='14px Inter,sans-serif';g.fillText(ks==='err'?'Kerzen konnten gerade nicht geladen werden – neuer Versuch in 2 Minuten.':'Lade Kerzen…',12,30);return}const[g,W,H]=cv('cK'),R=64;let lo=Infinity,hi=-Infinity;for(const k of ks){lo=Math.min(lo,k.l);hi=Math.max(hi,k.h)}
-  const open=[];for(const v in S.vars){if(!(S.units[v]>0))continue;const p=S.vars[v].acc[coin].pos;if(p){open.push([v,p]);lo=Math.min(lo,p.mid,p.sl||p.mid);hi=Math.max(hi,p.mid,p.sl||p.mid)}}
-  if(S.ki&&S.ki.pos[coin]){const p=S.ki.pos[coin];for(const v of [p.entry,p.sl,p.tp])if(v&&v>lo*0.85&&v<hi*1.15){lo=Math.min(lo,v);hi=Math.max(hi,v)}}const pad=(hi-lo)*0.06;lo-=pad;hi+=pad;const cw=(W-R)/ks.length,x=j=>(j+0.5)*cw,y=v=>8+(hi-v)/(hi-lo)*(H-24),t0=ks[0].t,xt=t=>x((t-t0)/(4*3600e3)-1);
+function tAxis(g,t0,t1,x,W,H){const sp=t1-t0,n=W<600?3:5,p=v=>String(v).padStart(2,'0');g.font='11px Inter,sans-serif';g.fillStyle='#8a8a8a';g.textAlign='center';for(let i=0;i<=n;i++){const t=t0+sp*i/n,d=new Date(t),X=x(t);g.fillStyle='#8a8a8a';g.fillText(p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+(sp<4*864e5?' '+p(d.getHours())+':'+p(d.getMinutes()):''),Math.max(32,Math.min(W-32,X)),H-2)}g.textAlign='start'}
+function tLab(t,tf,full){const d=new Date(t),p=n=>String(n).padStart(2,'0'),dm=p(d.getDate())+'.'+p(d.getMonth()+1)+'.';return tf==='1d'?dm+(full?String(d.getFullYear()).slice(2):''):tf==='4h'?(d.getHours()<4||full?dm:'')+(full||d.getHours()>=4?' '+p(d.getHours())+'h':''):dm+' '+p(d.getHours())+':00'}
+function drawK(){const ks=K[coin+TF];if(!ks||ks==='err'||!S){const[g,W,H]=cv('cK');g.fillStyle='#8a8a8a';g.font='14px Inter,sans-serif';g.fillText(ks==='err'?'Kerzen konnten gerade nicht geladen werden – neuer Versuch in 2 Minuten.':'Lade Kerzen…',12,30);return}
+  const[g,W,H]=cv('cK'),R=64,B=22,n=ks.length;if(!VIS)VIS=W<600?50:90;VIS=Math.max(20,Math.min(n,Math.round(VIS)));OFF=Math.max(0,Math.min(n-VIS,Math.round(OFF)));
+  const st=n-OFF-VIS,vs=ks.slice(st,st+VIS),SP=STEP[TF];let lo=Infinity,hi=-Infinity;for(const k of vs){lo=Math.min(lo,k.l);hi=Math.max(hi,k.h)}
+  const KI=S.ki,kp=KI&&KI.pos[coin];if(kp&&OFF===0)for(const v of [kp.entry,kp.sl,kp.tp])if(v&&v>lo*0.85&&v<hi*1.15){lo=Math.min(lo,v);hi=Math.max(hi,v)}
+  const open=[];for(const v in S.vars){if(!(S.units[v]>0))continue;const p=S.vars[v].acc[coin].pos;if(p)open.push([v,p])}
+  const pad=(hi-lo)*0.06;lo-=pad;hi+=pad;const cw=(W-R)/VIS,x=j=>(j+0.5)*cw,y=v=>8+(hi-v)/(hi-lo)*(H-B-12),t0=vs[0].t,xt=t=>x((t-t0)/SP);
   g.font='11px Inter,sans-serif';for(let q=0;q<=4;q++){const v=lo+(hi-lo)*q/4;g.strokeStyle='#161616';g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle='#8a8a8a';g.fillText(px(v),W-R+4,y(v)+4)}
-  ks.forEach((k,j)=>{g.strokeStyle=g.fillStyle=k.c>=k.o?'#22c55e':'#ef4444';g.beginPath();g.moveTo(x(j),y(k.h));g.lineTo(x(j),y(k.l));g.stroke();const t=Math.min(y(k.o),y(k.c));g.fillRect(x(j)-Math.max(1,cw*0.35),t,Math.max(2,cw*0.7),Math.max(1,Math.abs(y(k.o)-y(k.c))))});
-  for(const [v,p] of open){g.setLineDash([5,4]);g.strokeStyle='#f2f2f2';g.beginPath();g.moveTo(0,y(p.mid));g.lineTo(W-R,y(p.mid));g.stroke();if(p.sl){g.strokeStyle='#ef4444';g.beginPath();g.moveTo(0,y(p.sl));g.lineTo(W-R,y(p.sl));g.stroke()}g.setLineDash([]);g.fillStyle='#f2f2f2';g.fillText(VN[v]+(p.kind==='lev'?' · '+(p.qty*P(coin)/eqA(S.vars[v].acc[coin],coin)).toFixed(1).replace('.',',')+'x':''),4,y(p.mid)-4)}
-  g.textAlign='center';g.font='bold 11px Inter,sans-serif';g.globalAlpha=0.45;
-  for(const e of S.ev){if(e.c!==coin||e.v==='main'||!(S.units[e.v]>0)||e.t<t0)continue;const X=xt(e.t),Y=y(e.px);if(X<0||X>W-R)continue;
+  // Zeitstrahl
+  const every=Math.max(1,Math.ceil(VIS/(W<600?4:7)));g.textAlign='center';for(let j=VIS-1-((VIS-1)%every);j>=0;j-=every){const X=x(j);g.strokeStyle='#141414';g.beginPath();g.moveTo(X,8);g.lineTo(X,H-B);g.stroke();g.fillStyle='#8a8a8a';g.fillText(tLab(vs[j].t,TF,true),Math.min(W-R-30,Math.max(30,X)),H-6)}g.textAlign='start';
+  g.strokeStyle='#2a2a2a';g.beginPath();g.moveTo(0,H-B);g.lineTo(W-R,H-B);g.stroke();
+  vs.forEach((k,j)=>{g.strokeStyle=g.fillStyle=k.c>=k.o?'#22c55e':'#ef4444';g.beginPath();g.moveTo(x(j),y(k.h));g.lineTo(x(j),y(k.l));g.stroke();const t=Math.min(y(k.o),y(k.c));g.fillRect(x(j)-Math.max(1,cw*0.35),t,Math.max(1.5,cw*0.7),Math.max(1,Math.abs(y(k.o)-y(k.c))))});
+  if(OFF===0)for(const [v,p] of open){g.setLineDash([5,4]);g.strokeStyle='#f2f2f2';g.beginPath();g.moveTo(0,y(p.mid));g.lineTo(W-R,y(p.mid));g.stroke();if(p.sl){g.strokeStyle='#ef4444';g.beginPath();g.moveTo(0,y(p.sl));g.lineTo(W-R,y(p.sl));g.stroke()}g.setLineDash([]);g.fillStyle='#f2f2f2';g.fillText('Regel-Bot · '+VN[v],4,y(p.mid)-4)}
+  const inV=(X,Y)=>X>=0&&X<=W-R&&Y>=0&&Y<=H-B;
+  g.textAlign='center';g.font='bold 11px Inter,sans-serif';g.globalAlpha=0.5;
+  for(const e of S.ev){if(e.c!==coin||e.v==='main'||!(S.units[e.v]>0))continue;const X=xt(e.t-SP),Y=y(e.px);if(!inV(X,Y))continue;
     if(e.io==='in'){g.fillStyle=e.side>0?'#22c55e':'#ef4444';g.fillText(e.side>0?'▲':'▼',X,e.side>0?Y+14:Y-4)}else if(e.io==='add'){g.fillStyle='#5aa8ff';g.fillText('◆',X,Y+4)}else{g.fillStyle=e.pnl>=0?'#22c55e':'#ef4444';g.beginPath();g.arc(X,Y,4,0,7);g.fill()}}
-  g.globalAlpha=1;g.textAlign='start';
-  // KI-Trader: Einstiege, Ausstiege, offene Linien (blau umrandet, mit „KI“)
-  const KI=S.ki;if(KI){const mk=(t,pr,txt,col)=>{const X=xt(t),Y=y(pr);if(X<0||X>W-R||Y<0||Y>H)return;g.fillStyle=col;g.font='bold 15px Inter,sans-serif';g.textAlign='center';g.fillText(txt,X,Y+5);g.font='bold 9px Inter,sans-serif';g.fillStyle='#5aa8ff';g.fillText('KI',X,Y-9);g.textAlign='start'};
-    for(const t of KI.closed)if(t.c===coin){if(t.t0>=t0)mk(t.t0,t.entry,t.side>0?'▲':'▼',t.side>0?'#22c55e':'#ef4444');if(t.t>=t0)mk(t.t,t.exit,'●',t.pnl>=0?'#22c55e':'#ef4444')}
-    const p=KI.pos[coin];if(p){if(p.t>=t0)mk(p.t,p.entry,p.side>0?'▲':'▼',p.side>0?'#22c55e':'#ef4444');g.setLineDash([6,4]);for(const [v,col,lb] of [[p.entry,'#5aa8ff','KI Einstieg '+p.lev+'x'],[p.sl,'#ef4444','KI Stop'],[p.tp,'#22c55e','KI Ziel']]){if(!v||v<lo||v>hi)continue;g.strokeStyle=col;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle=col;g.font='11px Inter,sans-serif';g.fillText(lb,W-R-110,y(v)-4)}g.setLineDash([])}}
-  g.font='11px Inter,sans-serif';g.fillStyle='#8a8a8a';g.fillText(coin+'/USDT · 4-Stunden-Kerzen · blasse Zeichen = Regel-Bot',4,H-3)}
+  g.globalAlpha=1;
+  if(KI){const mk=(t,pr,txt,col)=>{const X=xt(t-SP/2),Y=y(pr);if(!inV(X,Y))return;g.fillStyle=col;g.font='bold 15px Inter,sans-serif';g.fillText(txt,X,Y+5);g.font='bold 9px Inter,sans-serif';g.fillStyle='#5aa8ff';g.fillText('KI',X,Y-9)};
+    for(const t of KI.closed)if(t.c===coin){mk(t.t0,t.entry,t.side>0?'▲':'▼',t.side>0?'#22c55e':'#ef4444');mk(t.t,t.exit,'●',t.pnl>=0?'#22c55e':'#ef4444')}
+    if(kp){mk(kp.t,kp.entry,kp.side>0?'▲':'▼',kp.side>0?'#22c55e':'#ef4444');if(OFF===0){g.textAlign='start';g.setLineDash([6,4]);for(const [v,col,lb] of [[kp.entry,'#5aa8ff','KI Einstieg '+kp.lev+'x'],[kp.sl,'#ef4444','KI Stop'],[kp.tp,'#22c55e','KI Ziel']]){if(!v||v<lo||v>hi)continue;g.strokeStyle=col;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle=col;g.font='11px Inter,sans-serif';g.fillText(lb,W-R-110,y(v)-4)}g.setLineDash([])}}}
+  g.textAlign='start';g.font='11px Inter,sans-serif';g.fillStyle='#8a8a8a';g.fillText(`${coin}/USDT · ${tLab(vs[0].t,TF,true)} – ${tLab(vs[vs.length-1].t,TF,true)}${OFF?' · Vergangenheit':''}`,4,18);
+  $('kNow').style.visibility=OFF?'visible':'hidden'}
 function drawEq(){const[g,W,H]=cv('cEq'),R=58,a=[...S.mainD,...(S.mainI||[]).filter(p=>p[0]>(S.mainD.length?S.mainD[S.mainD.length-1][0]:0))];if(a.length<2){g.fillStyle='#8a8a8a';g.font='14px Inter,sans-serif';g.fillText('Kurve erscheint nach der ersten halben Stunde seit dem Neustart.',12,30);return}  let lo=Infinity,hi=-Infinity;for(const p of a){lo=Math.min(lo,p[1]);hi=Math.max(hi,p[1])}lo=Math.min(lo,990);hi=Math.max(hi,1010);const t0=a[0][0],t1=a[a.length-1][0],x=t=>(t-t0)/(t1-t0)*(W-R),y=v=>H-16-(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo))*(H-26);
   g.font='11px Inter,sans-serif';g.strokeStyle='#1f1f1f';g.fillStyle='#8a8a8a';for(const v of [lo,1000,hi]){g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillText(Math.round(v).toLocaleString('de-DE')+' €',W-R+4,y(v)+4)}
-  let py=new Date(t0).getUTCFullYear();for(const p of a){const Y=new Date(p[0]).getUTCFullYear();if(Y!==py){g.fillStyle='#333';g.fillRect(x(p[0]),0,1,H-14);g.fillStyle='#8a8a8a';g.fillText(Y,x(p[0])+2,H-2);py=Y}}
+  tAxis(g,t0,t1,x,W-R,H);
   g.strokeStyle='#22c55e';g.lineWidth=2;g.beginPath();a.forEach((p,i)=>i?g.lineTo(x(p[0]),y(p[1])):g.moveTo(0,y(p[1])));g.stroke();g.lineWidth=1;
   if(S.live0){g.strokeStyle='#5aa8ff';g.setLineDash([4,4]);g.beginPath();g.moveTo(x(S.live0),0);g.lineTo(x(S.live0),H-14);g.stroke();g.setLineDash([]);g.fillStyle='#5aa8ff';g.fillText('live ab hier',Math.min(x(S.live0)-62,W-R-62),12)}}
 let NW=null;
@@ -250,9 +277,9 @@ function renderKI(){const K=S.ki;if(!K)return;const e=kiEq();
   else $('aMeta').textContent='Die erste Abwägung kommt in den nächsten Minuten'+(S.kiStage?` (Stand: ${S.kiStage} gesammelt)`:'')+'.';
   drawCmp()}
 function drawCmp(){const K=S.ki;if(!K)return;const[g,W,H]=cv('cCmp'),A=K.eqH.concat([[Date.now(),kiEq()]]),B=(S.mainI||[]).filter(p=>p[0]>=K.t0).concat([[Date.now(),eqMain()]]);
-  const all=A.concat(B);let lo=Math.min(...all.map(p=>p[1]),990),hi=Math.max(...all.map(p=>p[1]),1010);const t0=K.t0,t1=Date.now(),x=t=>(t-t0)/Math.max(1,t1-t0)*(W-50),y=v=>8+(hi-v)/(hi-lo)*(H-20);
+  const all=A.concat(B);let lo=Math.min(...all.map(p=>p[1]),990),hi=Math.max(...all.map(p=>p[1]),1010);const t0=K.t0,t1=Date.now(),x=t=>(t-t0)/Math.max(1,t1-t0)*(W-50),y=v=>8+(hi-v)/(hi-lo)*(H-28);
   g.font='11px Inter,sans-serif';g.strokeStyle='#1f1f1f';g.fillStyle='#8a8a8a';for(const v of [lo,1000,hi]){g.beginPath();g.moveTo(0,y(v));g.lineTo(W-50,y(v));g.stroke();g.fillText(Math.round(v)+' €',W-46,y(v)+4)}
-  for(const [a,col] of [[B,'#22c55e'],[A,'#5aa8ff']]){if(a.length<2)continue;g.strokeStyle=col;g.lineWidth=2;g.beginPath();a.forEach((p,i)=>i?g.lineTo(x(p[0]),y(p[1])):g.moveTo(x(p[0]),y(p[1])));g.stroke()}g.lineWidth=1}
+  for(const [a,col] of [[B,'#22c55e'],[A,'#5aa8ff']]){if(a.length<2)continue;g.strokeStyle=col;g.lineWidth=2;g.beginPath();a.forEach((p,i)=>i?g.lineTo(x(p[0]),y(p[1])):g.moveTo(x(p[0]),y(p[1])));g.stroke()}g.lineWidth=1;tAxis(g,t0,t1,x,W-50,H)}
 function renderDat(){const D=NW&&NW.daten;if(!D){return}const h=[];
   if(D.fg)h.push(`<div class="kpis"><div class="kpi"><span class="sub">Angst & Gier (Krypto)</span><b class="${D.fg.v<25?'down':D.fg.v>75?'up':''}">${D.fg.v} · ${esc(D.fg.txt)}</b><span class="sub">vor 7 Tagen: ${D.fg.vor7??'–'}</span></div>`+(D.global?`<div class="kpi"><span class="sub">Kryptomarkt gesamt</span><b>${D.global.mcap.toLocaleString('de-DE')} Mrd $</b><span class="sub">24h ${D.global.mcap24} %</span></div><div class="kpi"><span class="sub">BTC-Dominanz</span><b>${String(D.global.btcDom).replace('.',',')} %</b></div>`:'')+`</div>`);
   if(D.makro&&Object.keys(D.makro).length)h.push(`<h2 style="margin-top:10px">Weltmärkte</h2><table><thead><tr><th>Markt</th><th class="n">Stand</th><th class="n">1 Tag</th><th class="n">5 Tage</th></tr></thead><tbody>${Object.entries(D.makro).map(([n,o])=>`<tr><td>${esc(n)}</td><td class="n">${o.p.toLocaleString('de-DE')}</td><td class="n ${o.d1>=0?'up':'down'}">${o.d1} %</td><td class="n ${o.d5>=0?'up':'down'}">${o.d5} %</td></tr>`).join('')}</tbody></table>`);
@@ -283,9 +310,7 @@ function render(){if(!S||!S.vars)return;const m=eqMain();let pk=S.mainPeak||m;pk
   // Positionen (Anteil des Haupt-Kontos)
   let own=0,not=0;const rows=[];for(const v in S.vars){const u=S.units[v];if(!(u>0))continue;for(const c of COINS){const a=S.vars[v].acc[c],p=a.pos;if(!p)continue;const pr=P(c),e=eqA(a,c),pos=p.qty*pr*u,mine=(p.kind==='lev'?p.margin:p.qty*pr)*u,res=(e-p.cap0)*u;own+=mine;not+=pos;
     rows.push(`<tr><td><b>${c}</b></td><td>${VN[v]}</td><td class="${p.side>0?'up':'down'}">${p.side>0?'Long':'Short'}${p.nk?' · '+p.nk+'× nachgekauft':''}</td><td><span class="badge">${p.kind==='lev'?(p.qty*pr/e).toFixed(1).replace('.',',')+'x':'1x'}</span></td><td class="n">${eur(mine)}</td><td class="n">${eur(pos)}</td><td class="n">${px(p.mid)}</td><td class="n">${p.sl?px(p.sl):'–'}</td><td class="n ${res>=0?'up':'down'}">${res>=0?'+':''}${eur(res)}</td></tr>`)}}
-  const tst=[];for(const v in S.vars){if(S.units[v]>0)continue;for(const c of COINS){const a=S.vars[v].acc[c],p=a.pos;if(!p)continue;const pr=P(c),e=eqA(a,c),res=e-p.cap0;
-    tst.push(`<tr style="opacity:.75"><td><b>${c}</b></td><td>${VN[v]} <span class="sub">(nur Testkonto)</span></td><td class="${p.side>0?'up':'down'}">${p.side>0?'Long':'Short'}</td><td><span class="badge" style="background:#33333380;color:var(--mute)">${p.kind==='lev'?(p.qty*pr/e).toFixed(1).replace('.',',')+'x':'1x'}</span></td><td class="n">${eur(p.kind==='lev'?p.margin:p.qty*pr)}</td><td class="n">${eur(p.qty*pr)}</td><td class="n">${px(p.mid)}</td><td class="n">${p.sl?px(p.sl):'–'}</td><td class="n ${res>=0?'up':'down'}">${res>=0?'+':''}${eur(res)}</td></tr>`)}}
-  $('pos').innerHTML=(rows.join('')||'<tr><td colspan="9" class="sub">Im Haupt-Konto des Regel-Bots ist gerade keine Position offen.</td></tr>')+(tst.length?`<tr><td colspan="9" class="sub" style="padding-top:12px">Offene Trades in den Testkonten der Varianten (dort steckt gerade kein Geld vom Haupt-Konto – sie laufen nur mit, damit der Bot lernt, welche Variante passt):</td></tr>`+tst.join(''):'');
+  $('pos').innerHTML=rows.join('')||'<tr><td colspan="9" class="sub">Gerade keine Position offen – der Bot wartet auf das nächste Signal.</td></tr>';
   $('k1').textContent=eur(m);$('k2').textContent=eur(own);$('k3').textContent=eur(not);$('k4').textContent=(not/m).toFixed(2).replace('.',',')+'x';
   const sc=(S.view&&S.view.sc)||{};
   $('vt').innerHTML=Object.keys(VN).map(v=>[eqV(v),v]).sort((a,b)=>b[0]-a[0]).map(([x,v])=>{const s=sc[v];return`<tr><td><span class="sw" style="background:${VC[v]}"></span>${VN[v]}</td><td class="n ${v==='cash'?'':x>=1000?'up':'down'}">${eur0(x)}</td><td class="n">${v==='cash'?'–':s&&s.e!=null?`<span class="${s.e>0?'up':'down'}">${(s.e*10).toFixed(1).replace('.',',')}</span>`:'–'}</td><td class="n">${S.w[v]?Math.round(S.w[v]*100)+' %':'–'}</td></tr>`}).join('');
@@ -300,7 +325,7 @@ async function pull(){try{
   S=s;const ago=Math.round((Date.now()-S.lastRun)/60000);st(ago<=10?'ok':'err',ago<=10?`Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`Letzter Cloud-Lauf vor ${ago} Min`);try{render()}catch(e){__rep('render: '+(e&&e.stack||e))}
 }catch(e){__rep('pull: '+(e&&e.stack||e));st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
 function st(c,t){$('dot').className='dot '+c;$('st').textContent=t}
-pull().then(()=>{loadPush();return loadK(coin)}).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin]==='err')delete K[coin];loadK(coin).then(drawK)},120000);
+pull().then(()=>{loadPush();return loadK(coin)}).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin+TF]==='err')delete K[coin+TF];loadK(coin).then(drawK)},120000);
 new ResizeObserver(()=>{if(S){drawK();drawEq()}}).observe(document.body);
 })();
 </script>

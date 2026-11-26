@@ -132,8 +132,8 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: { ...CORS, 'access-control-allow-methods': 'GET,POST', 'access-control-allow-headers': 'content-type' } });
     if (u.pathname === '/api/news') { const s = await env.STATE.get('news'); return new Response(s || '{}', { headers: CORS }); }
     if (u.pathname === '/api/k') {   // Kerzen für die Seite (falls Binance im Browser nicht lädt)
-      const c = u.searchParams.get('c'), iv = u.searchParams.get('i') === '1d' ? '1d' : '4h'; if (!COINS.includes(c)) return new Response('[]', { status: 400, headers: CORS });
-      const j = await getJSON(`/api/v3/klines?symbol=${c}USDT&interval=${iv}&limit=120`); return new Response(JSON.stringify(j || []), { headers: CORS });
+      const c = u.searchParams.get('c'), iv = ['1h', '4h', '1d'].includes(u.searchParams.get('i')) ? u.searchParams.get('i') : '4h', n = Math.max(20, Math.min(1000, +u.searchParams.get('n') || 120)); if (!COINS.includes(c)) return new Response('[]', { status: 400, headers: CORS });
+      const j = await getJSON(`/api/v3/klines?symbol=${c}USDT&interval=${iv}&limit=${n}`); return new Response(JSON.stringify(j || []), { headers: CORS });
     }
     if (u.pathname === '/api/err') { const e = await env.STATE.get('err'); return new Response(e || '{}', { headers: CORS }); }
     if (u.pathname === '/api/run') {   // von Hand anstoßen – höchstens alle 4 Minuten
