@@ -174,13 +174,23 @@ async function run(env) {
   await env.STATE.put('state', JSON.stringify(S));
 }
 
+async function safeRun(env) {
+  const t0 = Date.now();
+  try { await run(env); const r = { ok: true, ms: Date.now() - t0, at: Date.now() }; await env.STATE.put('err', JSON.stringify(r)); return r; }
+  catch (e) { const r = { ok: false, err: String(e && e.stack || e), at: Date.now() }; await env.STATE.put('err', JSON.stringify(r)); return r; }
+}
 const CORS = { 'access-control-allow-origin': '*', 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(run(env)); },
+  async scheduled(event, env, ctx) { ctx.waitUntil(safeRun(env)); },
   async fetch(req, env) {
     const u = new URL(req.url);
     if (u.pathname === '/api/state') { const s = await env.STATE.get('state'); return new Response(s || '{}', { headers: CORS }); }
-    if (u.pathname === '/api/run' && u.searchParams.get('key') === env.RUN_KEY) { await run(env); return new Response('{"ok":true}', { headers: CORS }); }
+    if (u.pathname === '/api/err') { const e = await env.STATE.get('err'); return new Response(e || '{}', { headers: CORS }); }
+    if (u.pathname === '/api/run') {   // von Hand anstoßen – höchstens alle 4 Minuten
+      const s = await env.STATE.get('state'), last = s ? JSON.parse(s).lastRun || 0 : 0;
+      if (Date.now() - last < 4 * 60e3) return new Response('{"ok":true,"skip":true}', { headers: CORS });
+      const r = await safeRun(env); return new Response(JSON.stringify(r), { headers: CORS });
+    }
     return new Response('Max-Bot läuft. Zustand unter /api/state', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
   }
 };
