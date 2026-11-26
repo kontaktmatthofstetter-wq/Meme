@@ -1,7 +1,7 @@
 // Lern-Bot als Cloudflare Worker – läuft rund um die Uhr (Paper-Trading, kein echtes Geld)
 // Alle 5 Minuten: Kurse holen, Stops prüfen, neue 4h-/Tageskerzen der Reihe nach an die Engine geben, Zustand in KV speichern.
 import * as E from './engine.js';
-import { kiStep, freshKI, manageKI, fundKI, eqKI } from './ki.js';
+import { kiStep, freshKI, manageKI, fundKI, eqKI, alarmCheck } from './ki.js';
 const { COINS, H4, DAY } = E;
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api.binance.us'];
 const INIT = 'https://raw.githubusercontent.com/kontaktmatthofstetter-wq/Meme/main/cloud/init-state.json';
@@ -46,8 +46,9 @@ export async function run(env, now = Date.now()) {
     for (const x of k5) if (x.t + 5 * 60e3 <= now && x.t + 5 * 60e3 > (S.lastRun || 0) - 5 * 60e3) { E.touch(S, c, x.h, x.l, x.t + 5 * 60e3); manageKI(S.ki, c, x.h, x.l, x.t + 5 * 60e3); }
   }
   // 2) Alle neu geschlossenen 4h-Kerzen der Reihe nach verarbeiten (holt auch verpasste nach)
-  const last = Math.floor(now / H4) * H4 - H4;
+  const last = Math.floor(now / H4) * H4 - H4; let caught = false;
   if (S.t4 == null || S.t4 < last) {
+    caught = true;
     const from = S.t4 == null ? last : Math.max(S.t4 + H4, last - 39 * H4), to = Math.min(last, from + 3 * H4), miss = (last - from) / H4 + 1, K = {}, Dd = {};   // höchstens 4 Kerzen pro Lauf (Rechenzeit)
     const needDay = Math.floor((to + H4) / DAY) > Math.floor(from / DAY);
     await Promise.all(COINS.map(async c => {
@@ -72,7 +73,10 @@ export async function run(env, now = Date.now()) {
   if (S.ev.length > 700) S.ev.splice(0, S.ev.length - 700);
   if (S.regH.length > 400) S.regH.splice(0, S.regH.length - 400);
   // KI-Trader: alle 2 Stunden Daten in Stufen sammeln, dann abwägen und handeln (ungerade UTC-Stunden, nicht zeitgleich mit 4h-Kerzen)
-  if (new Date(now).getUTCHours() % 2 === 1 || !S.ki.dec.length) { try { S.kiStage = await kiStep(env, S, getJSON, now) || S.kiStage; } catch (e) { S.kiErr = String(e && e.stack || e).slice(0, 500); } }
+  let did = null;
+  if (new Date(now).getUTCHours() % 2 === 1 || !S.ki.dec.length) { try { did = await kiStep(env, S, getJSON, now); S.kiStage = did || S.kiStage; } catch (e) { S.kiErr = String(e && e.stack || e).slice(0, 500); } }
+  // Alarm-Prüfung in jedem Lauf, in dem nicht schon gesammelt/abgewogen wurde und keine 4h-Kerzen nachgeholt wurden
+  if (!did && !caught) { try { await alarmCheck(env, S, getJSON, now); } catch (e) { S.kiErr = 'Alarm: ' + String(e && e.stack || e).slice(0, 400); } }
   const ke = eqKI(S.ki, S.px); S.ki.peak = Math.max(S.ki.peak, ke); S.ki.eq = +ke.toFixed(2);
   if (now - S.ki.eqH[S.ki.eqH.length - 1][0] >= 30 * 60e3) { S.ki.eqH.push([now, S.ki.eq]); if (S.ki.eqH.length > 3000) S.ki.eqH.shift(); }
   S.lastRun = now;

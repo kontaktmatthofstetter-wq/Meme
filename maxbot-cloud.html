@@ -74,6 +74,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
     <p id="aLage" style="margin:8px 0"></p>
     <div id="aFak" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     <div id="aEnt" style="margin-top:10px"></div>
+    <div id="aAlarm" style="margin-top:10px"></div>
     <details style="margin-top:8px"><summary class="sub" style="cursor:pointer">Frühere Abwägungen</summary><div id="aHist" class="feed"></div></details>
   </div>
 
@@ -225,10 +226,11 @@ function renderKI(){const K=S.ki;if(!K)return;const e=kiEq();
   $('q1').textContent=eur(e);$('q2').textContent=eur(own);$('q3').textContent=eur(not);$('q4').textContent=(not/e).toFixed(2).replace('.',',')+'x';
   $('kClosed').innerHTML=K.closed.slice(0,40).map(t=>`<tr><td>${tm(t.t)}</td><td>${t.c}</td><td class="${t.side>0?'up':'down'}">${t.side>0?'Long':'Short'} ${t.lev}x</td><td class="n ${t.pnl>=0?'up':'down'}">${t.pnl>=0?'+':''}${eur(t.pnl)} (${String(t.pct).replace('.',',')} %)</td><td>${esc(t.why)}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">Noch keine.</td></tr>';
   const d=K.dec[0];
-  if(d){$('aMeta').textContent=`Abwägung von ${tm(d.t)}${NW&&NW.fc?' · '+NW.fc.quelle:''}`;$('aLage').textContent=d.lage||'';
-    $('aEnt').innerHTML=(d.ent&&d.ent.length?d.ent.map(x=>{const a=String(x.aktion||'').toLowerCase(),col=/long/.test(a)?'var(--up)':/short/.test(a)?'var(--down)':'var(--warn)';return`<div class="fcc" style="margin-top:8px"><b>${esc(x.coin)}</b> · <b style="color:${col}">${esc(String(x.aktion).toUpperCase())}</b>${/long|short/.test(a)?` · Hebel ${esc(x.hebel)}x · Einsatz ${esc(x.einsatz)} % · Stop ${esc(x.stop)} · Ziel ${esc(x.ziel??'–')}`:''}<div style="margin-top:4px">${esc(x.grund)}</div></div>`}).join(''):'<div class="fcc" style="margin-top:8px">Entscheidung: <b>nichts tun</b> – die Lage ist ihm nicht klar genug.</div>')
+  if(d){$('aMeta').innerHTML=`${d.alarm?'<span class="chip" style="border-color:var(--warn);color:var(--warn)">⚡ Alarm-Abwägung</span> ':''}Abwägung von ${tm(d.t)}${NW&&NW.fc?' · '+esc(NW.fc.quelle):''}${d.alarm?'<br>Auslöser: '+esc(d.alarm):''}`;$('aLage').textContent=d.lage||'';
+    $('aEnt').innerHTML=(d.ent&&d.ent.length?d.ent.map(x=>{const a=String(x.aktion||'').toLowerCase(),col=/long/.test(a)?'var(--up)':/short/.test(a)?'var(--down)':'var(--warn)';return`<div class="fcc" style="margin-top:8px"><b>${esc(x.coin)}</b> · <b style="color:${col}">${esc(String(x.aktion).toUpperCase())}</b>${/long|short/.test(a)?` · Hebel ${esc(x.hebel)}x · Einsatz ${esc(x.einsatz)} % · Stop ${esc(x.stop??"–")} · Ziel ${esc(x.ziel??'–')}`:''}<div style="margin-top:4px">${esc(x.grund)}</div></div>`}).join(''):'<div class="fcc" style="margin-top:8px">Entscheidung: <b>nichts tun</b> – die Lage ist ihm nicht klar genug.</div>')
       +(d.notes&&d.notes.length?`<p class="note">🛡️ Umsetzung: ${d.notes.map(esc).join(' · ')}</p>`:'');
-    $('aHist').innerHTML=K.dec.slice(1,15).map(x=>`<div><b>${tm(x.t)}</b> · ${esc(x.lage)}<br><span class="sub">${x.ent&&x.ent.length?x.ent.map(e=>esc(e.coin+' '+e.aktion)).join(', '):'nichts getan'}</span></div>`).join('')||'<div class="sub">Noch keine.</div>'}
+    const A=S.alarm;$('aAlarm').innerHTML=`<div class="sub">⚡ <b>Alarm-Wächter</b> prüft alle 5 Minuten Kurssprünge und alle 10 Minuten Eilmeldungen und Liquidationswellen. Bei etwas Wichtigem wägt er sofort ab (heute ${A?A.n:0} von 10).${A&&A.pending?' <span style="color:var(--warn)">Wartet gerade: '+esc(A.pending)+'</span>':''}</div>`+(A&&A.log.length?`<details><summary class="sub" style="cursor:pointer">Letzte Alarme (${A.log.length})</summary><div class="feed">${A.log.slice(0,20).map(l=>`<div>${tm(l.t)} · ${esc(l.txt)} <span class="sub">→ ${esc(l.info)}</span></div>`).join('')}</div></details>`:'');
+    $('aHist').innerHTML=K.dec.slice(1,15).map(x=>`<div><b>${tm(x.t)}</b>${x.alarm?' ⚡':''} · ${esc(x.lage)}<br><span class="sub">${x.ent&&x.ent.length?x.ent.map(e=>esc(e.coin+' '+e.aktion)).join(', '):'nichts getan'}</span></div>`).join('')||'<div class="sub">Noch keine.</div>'}
   else $('aMeta').textContent='Die erste Abwägung kommt in den nächsten Minuten'+(S.kiStage?` (Stand: ${S.kiStage} gesammelt)`:'')+'.';
   drawCmp()}
 function drawCmp(){const K=S.ki;if(!K)return;const[g,W,H]=cv('cCmp'),A=K.eqH.concat([[Date.now(),kiEq()]]),B=(S.mainI||[]).filter(p=>p[0]>=K.t0).concat([[Date.now(),eqMain()]]);

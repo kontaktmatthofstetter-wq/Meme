@@ -156,10 +156,17 @@ export async function kiStep(env, S, getJSON, now) {
   let X = JSON.parse(await env.STATE.get('ctx') || 'null');
   if (!X || X.slot !== slot) { const N0 = JSON.parse(await env.STATE.get('news') || 'null'); if (N0 && N0.slot === slot && N0.ki) return null; X = { slot, stage: 0 }; }
   if (X.stage >= 4) return null;
-  if (X.stage === 0) { await stageMarkt(X); X.stage = 1; await env.STATE.put('ctx', JSON.stringify(X)); return 'markt'; }
+  if (X.stage === 0) { await stageMarkt(X); X.at = now; X.stage = 1; await env.STATE.put('ctx', JSON.stringify(X)); return 'markt'; }
   if (X.stage === 1) { await stageDerivate(X); X.stage = 2; await env.STATE.put('ctx', JSON.stringify(X)); return 'derivate'; }
   if (X.stage === 2) { await stageTechnik(X, getJSON); X.stage = 3; await env.STATE.put('ctx', JSON.stringify(X)); return 'technik'; }
   // Stufe 3: Nachrichten + Abwägung + Handeln
+  await decide(env, S, X, now, null);
+  X.stage = 4; await env.STATE.put('ctx', JSON.stringify(X));
+  return 'entscheidung';
+}
+
+async function decide(env, S, X, now, alarm) {
+  const slot = Math.floor(now / 7200e3);
   const K = S.ki, P = { ...S.px };
   let N = JSON.parse(await env.STATE.get('news') || 'null') || { open: [], hist: [], stats: {} };
   grade(N, P, now);
@@ -168,7 +175,10 @@ export async function kiStep(env, S, getJSON, now) {
   let out = null, raw = '';
   if (env.AI) {
     try {
-      const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'system', content: SYS }, { role: 'user', content: prompt(X, S, K, P, N, news, now) + FORMAT }], max_tokens: 2200, temperature: 0.25 });
+      const pend = !alarm && S.alarm && S.alarm.pending ? `Seit deiner letzten Abwägung ist passiert: ${S.alarm.pending}\n\n` : '';
+      if (pend) { S.alarm.pending = ''; S.alarm.pendT = 0; }
+      const head = pend + (alarm ? `⚡ ALARM – darum wirst du außerhalb der Reihe gefragt: ${alarm}\nPrüfe, ob du jetzt handeln musst (einsteigen, aussteigen, Stop anpassen) oder ob es nur Lärm ist. Die Technik-Daten sind frisch, Derivate/Makro sind von ${X.at ? new Date(X.at).toISOString().slice(11, 16) : 'vorhin'} UTC.\n\n` : '');
+      const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'system', content: SYS }, { role: 'user', content: head + prompt(X, S, K, P, N, news, now) + FORMAT }], max_tokens: 2200, temperature: 0.25 });
       raw = typeof r.response === 'string' ? r.response : JSON.stringify(r.response);
       out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
     } catch (e) { out = null; raw = String(e).slice(0, 300) + ' ' + raw.slice(0, 300); }
@@ -183,15 +193,66 @@ export async function kiStep(env, S, getJSON, now) {
         news: (o.news || []).map(i => news[+i]).filter(Boolean).slice(0, 3).map(n => n.title), px: P[c], tech: X.tech && X.tech[c] ? { ch1: X.tech[c].h24, ch7: X.tech[c].d7, rsi: X.tech[c].rsiTag, trend: X.tech[c].trendTag } : null }; }
     const decs = Array.isArray(out.entscheidungen) ? out.entscheidungen.slice(0, 6) : [];
     for (const d of decs) execute(K, d, P, X.tech || {}, now, notes);
-    K.dec.unshift({ t: now, lage: fc.markt, ent: decs.map(d => ({ coin: d.coin, aktion: d.aktion, hebel: d.hebel, einsatz: d.einsatz, stop: d.stop, ziel: d.ziel, grund: String(d.grund || '').slice(0, 400) })), notes });
+    K.dec.unshift({ t: now, alarm: alarm || null, lage: fc.markt, ent: decs.map(d => ({ coin: d.coin, aktion: d.aktion, hebel: d.hebel, einsatz: d.einsatz, stop: d.stop, ziel: d.ziel, grund: String(d.grund || '').slice(0, 400) })), notes });
     if (K.dec.length > 40) K.dec.length = 40;
-    if (slot % 3 === 0 || !N.fc) for (const c in fc.coins) if (P[c]) N.open.push({ t: now, c, richtung: fc.coins[c].richtung, sicherheit: fc.coins[c].sicherheit, px: P[c] });
+    if (!alarm && (slot % 3 === 0 || !N.fc)) for (const c in fc.coins) if (P[c]) N.open.push({ t: now, c, richtung: fc.coins[c].richtung, sicherheit: fc.coins[c].sicherheit, px: P[c] });
   }
   if (N.open.length > 200) N.open.splice(0, N.open.length - 200);
-  N.fc = fc; N.slot = slot; N.at = now; N.ki = true; N.raw = out ? '' : raw;
+  if (alarm && !out) { await env.STATE.put('news', JSON.stringify(N)); return false; }
+  if (alarm) fc.alarm = alarm; else { N.slot = slot; N.ki = true; }
+  N.fc = fc; N.at = now; N.raw = out ? '' : raw;
   N.news = news.map(n => ({ t: n.t, title: n.title, link: n.link, src: n.src, coins: n.coins, sent: n.sent }));
   N.daten = { fg: X.fg, global: X.global, makro: X.makro, cal: X.cal, der: X.der, tech: X.tech };
   await env.STATE.put('news', JSON.stringify(N));
-  X.stage = 4; await env.STATE.put('ctx', JSON.stringify(X));
-  return 'entscheidung';
+  return !!out;
+}
+
+/* ---------- Alarm: nichts Wichtiges verpassen ---------- */
+// Alle 5 Min: Kurssprünge. Alle 10 Min: Eilmeldungen und Liquidationswellen. Bei Alarm sofort abwägen.
+const BREAK = /\b(hack\w*|exploit\w*|etf\w*|sec|ban\w*|approv\w*|fed|powell|rate (cut|hike)\w*|crash\w*|plunge\w*|surge\w*|soar\w*|record|liquidat\w*|bankrupt\w*|lawsuit\w*|tariff\w*|war|sanction\w*|halt\w*|delist\w*|listing|emergency|breaking|collapse\w*|seiz\w*|arrest\w*|cpi|inflation)\b/i;
+const ALARM_MAX = 10, ALARM_GAP = 20 * 60e3;
+export async function alarmCheck(env, S, getJSON, now) {
+  const A = S.alarm = S.alarm || { day: '', n: 0, last: 0, seen: [], log: [], cool: {}, liqAvg: {} };
+  const day = new Date(now).toISOString().slice(0, 10); if (A.day !== day) { A.day = day; A.n = 0; }
+  S.pxH = S.pxH || []; S.pxH.push([now, { ...S.px }]); while (S.pxH.length && S.pxH[0][0] < now - 65 * 60e3) S.pxH.shift();
+  const why = [], coolOk = k => !(A.cool[k] > now);
+  // 1) Kurssprünge (15 Min und 1 Stunde)
+  const ago = m => { let best = null; for (const [t, p] of S.pxH) if (t <= now - m * 60e3 + 90e3) best = p; return best; };
+  const p15 = ago(15), p60 = ago(60);
+  for (const c of COINS) { const p = S.px[c]; if (!p) continue; const lim = c === 'BTC' ? 1 : 1.5;
+    const m15 = p15 && p15[c] ? pct(p, p15[c]) : 0, m60 = p60 && p60[c] ? pct(p, p60[c]) : 0;
+    if (Math.abs(m15) >= 1.5 * lim && coolOk('p' + c)) { why.push(`${c} ${m15 > 0 ? '+' : ''}${r1(m15)} % in 15 Minuten`); A.cool['p' + c] = now + 2 * 3600e3; }
+    else if (Math.abs(m60) >= 3 * lim && coolOk('p' + c)) { why.push(`${c} ${m60 > 0 ? '+' : ''}${r1(m60)} % in 1 Stunde`); A.cool['p' + c] = now + 2 * 3600e3; }
+    const ps = S.ki.pos[c]; if (ps && coolOk('s' + c) && Math.abs(p - ps.sl) / p < 0.004) { why.push(`${c} kurz vor deinem Stop (${ps.sl.toPrecision(6)})`); A.cool['s' + c] = now + 3 * 3600e3; }
+  }
+  // 2) Eilmeldungen + Liquidationswellen (alle 10 Minuten)
+  let fresh = [];
+  if (Math.floor(now / 600e3) !== A.slot10) {
+    A.slot10 = Math.floor(now / 600e3);
+    const news = await fetchNews(), first = !A.seen.length;
+    for (const n of news) { const k = n.title.toLowerCase().slice(0, 70); if (A.seen.includes(k)) continue; A.seen.push(k);
+      if (!first && n.t > now - 45 * 60e3 && (Math.abs(n.sent) >= 1 || BREAK.test(n.title))) fresh.push(n); }
+    if (A.seen.length > 300) A.seen.splice(0, A.seen.length - 300);
+    if (fresh.length && coolOk('news')) { why.push('Neue wichtige Meldung' + (fresh.length > 1 ? 'en' : '') + ': ' + fresh.slice(0, 3).map(n => `„${n.title}“`).join(' · ')); A.cool.news = now + 45 * 60e3; }
+    for (const c of ['BTC', 'ETH']) {
+      const lq = await J(`https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&uly=${c}-USDT&state=filled`);
+      if (!lq || !lq.data || !lq.data[0]) continue; let L = 0, Sh = 0;
+      for (const d of lq.data[0].details || []) if (+d.ts > now - 15 * 60e3) { const usd = +d.sz * CT[c] * +d.bkPx; if (d.posSide === 'long') L += usd; else Sh += usd; }
+      const tot = L + Sh, avg = A.liqAvg[c] ?? tot; A.liqAvg[c] = avg * 0.9 + tot * 0.1;
+      if (tot > Math.max(3 * avg, c === 'BTC' ? 2e6 : 1e6) && coolOk('l' + c)) { why.push(`Liquidationswelle ${c}: ${Math.round(tot / 1e5) / 10} Mio $ in 15 Min (${L > Sh ? 'vor allem Longs' : 'vor allem Shorts'})`); A.cool['l' + c] = now + 2 * 3600e3; }
+    }
+  }
+  if (!why.length && !A.pending) return null;
+  if (why.length) { A.pending = [A.pending, why.join(' · ')].filter(Boolean).join(' · ').slice(-900); A.pendT = A.pendT || now; }
+  const txt = A.pending;
+  if (A.n >= ALARM_MAX || now - A.last < ALARM_GAP) {   // nicht verwerfen: wird nachgeholt
+    if (why.length) { A.log.unshift({ t: now, txt: why.join(' · '), ok: false, info: A.n >= ALARM_MAX ? 'Tageslimit erreicht – geht in die nächste reguläre Abwägung' : 'wird in wenigen Minuten nachgeholt' }); A.log.length = Math.min(A.log.length, 60); }
+    return null;
+  }
+  // frische Technik, Rest vom letzten Durchgang
+  let X = JSON.parse(await env.STATE.get('ctx') || 'null') || {}; X = { ...X }; await stageTechnik(X, getJSON); X.at = X.at || now;
+  A.n++; A.last = now; A.pending = ''; A.pendT = 0;
+  const ok = await decide(env, S, X, now, txt);
+  A.log.unshift({ t: now, txt, ok, info: ok ? 'sofort abgewogen' : 'KI nicht erreichbar' }); A.log.length = Math.min(A.log.length, 60);
+  return 'alarm';
 }
