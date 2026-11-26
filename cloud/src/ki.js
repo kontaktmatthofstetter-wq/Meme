@@ -1,0 +1,197 @@
+// KI-Trader: sammelt alles, was Kurse bewegen kann, wägt ab und handelt nach eigenem Ermessen (Spielgeld).
+// Die KI entscheidet Richtung, Hebel, Einsatz, Stop und Ziel. Der Code setzt nur Sicherheitsgrenzen durch.
+import { COINS, VARS } from './engine.js';
+import { fetchNews, grade } from './news.js';
+
+const FFEE = 0.0005, SLIP = 0.0002, MAXLEV = 10, MAXRISK = 0.03, MAXMARGIN = 0.8, MAXONE = 0.25;
+const CT = { BTC: 0.01, ETH: 0.1, SOL: 1, BNB: 0.01, XRP: 100, DOGE: 1000 };   // OKX-Kontraktgrößen
+const YH = { 'S&P 500': '%5EGSPC', 'Nasdaq': '%5EIXIC', 'US-Dollar (DXY)': 'DX-Y.NYB', 'Gold': 'GC%3DF', 'US-Zins 10 J.': '%5ETNX', 'Angst-Index Aktien (VIX)': '%5EVIX' };
+const r1 = x => Math.round(x * 10) / 10, r2 = x => Math.round(x * 100) / 100;
+const pct = (a, b) => (a / b - 1) * 100;
+async function J(url) { try { const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Lern-Bot)', accept: 'application/json' } }); if (!r.ok) return null; return await r.json(); } catch (e) { return null; } }
+
+export function freshKI(now) { return { start: 1000, cash: 1000, pos: {}, closed: [], eqH: [[now, 1000]], peak: 1000, t0: now, dec: [], fundRate: {}, lastFund: now, n: 0, win: 0 }; }
+export function eqPos(p, px) { const ex = px * (1 - p.side * SLIP); return Math.max(0, p.margin + p.side * (ex - p.entry) * p.qty - ex * p.qty * FFEE - p.fund); }
+export function eqKI(K, P) { let s = K.cash; for (const c in K.pos) s += eqPos(K.pos[c], P[c] || K.pos[c].entry); return s; }
+
+function closeKI(K, c, why, price, now) {
+  const p = K.pos[c]; if (!p) return; const back = eqPos(p, price), pnl = back - p.margin;
+  K.cash += back; delete K.pos[c]; K.n++; if (pnl > 0) K.win++;
+  K.closed.unshift({ c, side: p.side, lev: p.lev, entry: p.entry, exit: price, pnl: r2(pnl), pct: r1(pnl / p.margin * 100), why, grund: p.grund, t0: p.t, t: now });
+  if (K.closed.length > 200) K.closed.length = 200;
+}
+// alle 5 Minuten: Stop, Ziel, Liquidation, Finanzierung
+export function manageKI(K, c, hi, lo, now) {
+  const p = K.pos[c]; if (!p) return; const sd = p.side;
+  if (sd > 0 ? lo <= p.liq : hi >= p.liq) { closeKI(K, c, 'Liquidiert', p.liq, now); return; }
+  if (sd > 0 ? lo <= p.sl : hi >= p.sl) { closeKI(K, c, 'Stop-Loss', p.sl, now); return; }
+  if (p.tp && (sd > 0 ? hi >= p.tp : lo <= p.tp)) closeKI(K, c, 'Ziel erreicht', p.tp, now);
+}
+export function fundKI(K, P, now) {
+  const h = (now - (K.lastFund || now)) / 3600e3; K.lastFund = now; if (h <= 0 || h > 3) return;
+  for (const c in K.pos) { const p = K.pos[c], rate = K.fundRate[c] ?? 0.0001; p.fund += p.side * p.qty * (P[c] || p.entry) * rate * h / 8; }
+}
+
+/* ---------- Ausführen, was die KI entschieden hat (mit Grenzen) ---------- */
+function execute(K, d, P, T, now, notes) {
+  const c = String(d.coin || '').toUpperCase(); if (!COINS.includes(c) || !P[c]) return;
+  const a = String(d.aktion || '').toLowerCase(), px = P[c], cur = K.pos[c];
+  if (/schlie|close|raus/.test(a)) { if (cur) { closeKI(K, c, 'KI schließt: ' + String(d.grund || '').slice(0, 120), px, now); notes.push(`${c}: geschlossen`); } return; }
+  if (/halt|hold/.test(a)) {
+    if (cur) { const sl = +d.stop, tp = +d.ziel;
+      if (sl && (cur.side > 0 ? sl < px && sl > cur.liq : sl > px && sl < cur.liq)) cur.sl = sl;
+      if (tp && (cur.side > 0 ? tp > px : tp < px)) cur.tp = tp; }
+    return;
+  }
+  const sd = /long|kauf/.test(a) ? 1 : /short/.test(a) ? -1 : 0; if (!sd) return;
+  if (cur && cur.side === sd) return execute(K, { ...d, aktion: 'halten' }, P, T, now, notes);
+  if (cur) closeKI(K, c, 'Seitenwechsel', px, now);
+  const eq = eqKI(K, P); let lev = Math.max(1, Math.min(MAXLEV, Math.round(+d.hebel || 1))), mPct = Math.max(1, Math.min(MAXONE * 100, +d.einsatz || 5)) / 100;
+  let sl = +d.stop; const atr = T[c] ? T[c].atrPct / 100 * px : px * 0.03;
+  if (!(sl > 0) || (sd > 0 ? sl >= px : sl <= px)) { sl = px - sd * 1.5 * atr; notes.push(`${c}: Stop fehlte/falsch – auf 1,5 Tages-Schwankungen gesetzt`); }
+  let dist = Math.abs(px - sl) / px; if (dist < 0.003) { dist = 0.003; sl = px - sd * px * dist; }
+  if (dist > 0.2) { dist = 0.2; sl = px - sd * px * dist; }
+  if (dist * lev > 0.85) { lev = Math.max(1, Math.floor(0.85 / dist)); notes.push(`${c}: Hebel gesenkt auf ${lev}x, damit der Stop vor der Liquidation kommt`); }
+  let margin = eq * mPct; const maxLoss = eq * MAXRISK;
+  if (margin * lev * (dist + 2 * (FFEE + SLIP)) > maxLoss) { margin = maxLoss / (lev * (dist + 2 * (FFEE + SLIP))); notes.push(`${c}: Einsatz gekürzt – höchstens 3 % Verlust pro Trade`); }
+  let used = 0; for (const k in K.pos) used += K.pos[k].margin; margin = Math.min(margin, eq * MAXMARGIN - used, K.cash - 1);
+  if (margin < 1) { notes.push(`${c}: kein freies Geld mehr`); return; }
+  const notional = margin * lev, fill = px * (1 + sd * SLIP), qty = notional / fill;
+  K.cash -= margin + notional * FFEE;
+  let tp = +d.ziel; if (!(tp > 0) || (sd > 0 ? tp <= px : tp >= px)) tp = null;
+  K.pos[c] = { side: sd, lev, qty, margin, entry: fill, sl, tp, liq: fill * (1 - sd * (1 / lev) * 0.995), fund: 0, t: now, grund: String(d.grund || '').slice(0, 400), sicher: +d.sicherheit || null };
+  notes.push(`${c}: ${sd > 0 ? 'LONG' : 'SHORT'} ${lev}x, Einsatz ${r2(margin)} €`);
+}
+
+/* ---------- Daten sammeln (in Stufen, damit ein Lauf nicht zu viele Abfragen macht) ---------- */
+async function stageMarkt(X) {
+  const fg = await J('https://api.alternative.me/fng/?limit=8');
+  if (fg && fg.data) X.fg = { v: +fg.data[0].value, txt: fg.data[0].value_classification, vor7: fg.data[7] ? +fg.data[7].value : null };
+  X.makro = {};
+  await Promise.all(Object.entries(YH).map(async ([n, s]) => {
+    const j = await J(`https://query1.finance.yahoo.com/v8/finance/chart/${s}?range=10d&interval=1d`);
+    const r = j && j.chart && j.chart.result && j.chart.result[0]; if (!r) return;
+    const cl = (r.indicators.quote[0].close || []).filter(x => x != null), p = r.meta.regularMarketPrice || cl[cl.length - 1]; if (cl.length < 6) return;
+    X.makro[n] = { p: r2(p), d1: r1(pct(p, cl[cl.length - 2])), d5: r1(pct(p, cl[cl.length - 6])) };
+  }));
+  const g = await J('https://api.coinpaprika.com/v1/global');
+  if (g && g.bitcoin_dominance_percentage) X.global = { btcDom: r1(g.bitcoin_dominance_percentage), mcap: Math.round(g.market_cap_usd / 1e9), mcap24: r1(g.market_cap_change_24h) };
+  const cal = await J('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
+  if (Array.isArray(cal)) X.cal = cal.filter(e => e.impact === 'High' && ['USD', 'EUR', 'CNY', 'JPY'].includes(e.country)).map(e => ({ t: Date.parse(e.date), land: e.country, name: e.title, prog: e.forecast || '', vorher: e.previous || '' })).filter(e => e.t > Date.now() - 24 * 3600e3 && e.t < Date.now() + 72 * 3600e3).slice(0, 12);
+}
+async function stageDerivate(X) {
+  X.der = {};
+  await Promise.all(COINS.map(async c => {
+    const o = {}, inst = `${c}-USDT-SWAP`;
+    const f = await J(`https://www.okx.com/api/v5/public/funding-rate?instId=${inst}`); if (f && f.data && f.data[0]) { o.funding = +f.data[0].fundingRate; o.fundingProzent = Math.round(o.funding * 1e6) / 1e4; }
+    const ls = await J(`https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=${c}&period=1H`);
+    if (ls && ls.data && ls.data.length > 24) o.ls = { jetzt: r2(+ls.data[0][1]), vor24h: r2(+ls.data[24][1]) };
+    const oi = await J(`https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-volume?ccy=${c}&period=1H`);
+    if (oi && oi.data && oi.data.length > 24) o.oi = { mio: Math.round(+oi.data[0][1] / 1e6), ch24: r1(pct(+oi.data[0][1], +oi.data[24][1])) };
+    const lq = await J(`https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&uly=${c}-USDT&state=filled`);
+    if (lq && lq.data && lq.data[0]) { let L = 0, S = 0, t0 = Infinity; for (const d of lq.data[0].details || []) { const usd = +d.sz * (CT[c] || 1) * +d.bkPx; t0 = Math.min(t0, +d.ts); if (d.posSide === 'long') L += usd; else S += usd; }
+      o.liq = { longs: Math.round(L), shorts: Math.round(S), stunden: r1((Date.now() - t0) / 3600e3) }; }
+    X.der[c] = o;
+  }));
+}
+const ema = (v, n) => { const k = 2 / (n + 1); let e = v[0]; return v.map((x, i) => i ? (e = x * k + e * (1 - k)) : e); };
+function rsi(cl, n = 14) { let g = 0, l = 0; for (let i = cl.length - n; i < cl.length; i++) { const d = cl[i] - cl[i - 1]; if (d > 0) g += d; else l -= d; } return l === 0 ? 100 : 100 - 100 / (1 + g / l); }
+async function stageTechnik(X, getJSON) {
+  X.tech = {};
+  await Promise.all(COINS.map(async c => {
+    const h = await getJSON(`/api/v3/klines?symbol=${c}USDT&interval=1h&limit=200`), d = await getJSON(`/api/v3/klines?symbol=${c}USDT&interval=1d&limit=120`);
+    if (!h || !d || d.length < 60) return;
+    const hc = h.map(k => +k[4]), dc = d.map(k => +k[4]), p = hc[hc.length - 1], n = dc.length - 1;
+    let tr = 0; for (let i = n - 13; i <= n; i++) tr += Math.max(+d[i][2] - +d[i][3], Math.abs(+d[i][2] - dc[i - 1]), Math.abs(+d[i][3] - dc[i - 1])); const atr = tr / 14;
+    const e20h = ema(hc, 20), e50h = ema(hc, 50), e20 = ema(dc, 20), e50 = ema(dc, 50);
+    let vh = 0, va = 0; for (let i = h.length - 24; i < h.length; i++) vh += +h[i][5]; for (let i = h.length - 168; i < h.length - 24; i++) va += +h[i][5]; va = va / 6;
+    const hi30 = Math.max(...d.slice(-30).map(k => +k[2])), lo30 = Math.min(...d.slice(-30).map(k => +k[3]));
+    const o = { preis: p, h4: r1(pct(p, hc[hc.length - 5])), h24: r1(pct(p, hc[hc.length - 25])), d7: r1(pct(p, dc[n - 7])), d30: r1(pct(p, dc[n - 30])), d90: r1(pct(p, dc[n - 90])),
+      rsi1h: Math.round(rsi(hc)), rsiTag: Math.round(rsi(dc)), trend1h: p > e20h[e20h.length - 1] && e20h[e20h.length - 1] > e50h[e50h.length - 1] ? 'auf' : p < e20h[e20h.length - 1] && e20h[e20h.length - 1] < e50h[e50h.length - 1] ? 'ab' : 'unklar',
+      trendTag: p > e20[n] && e20[n] > e50[n] ? 'auf' : p < e20[n] && e20[n] < e50[n] ? 'ab' : 'unklar', atrPct: r1(atr / p * 100), volumen24hVsSchnitt: r1(vh / va), hoch30: hi30, tief30: lo30 };
+    const b = await J(`https://www.okx.com/api/v5/market/books?instId=${c}-USDT&sz=200`);
+    if (b && b.data && b.data[0]) { let B = 0, A = 0; for (const [q, s] of b.data[0].bids) if (+q >= p * 0.99) B += +q * +s; for (const [q, s] of b.data[0].asks) if (+q <= p * 1.01) A += +q * +s; if (A + B > 0) o.orderbuch = { kaufSeiteProzent: Math.round(B / (A + B) * 100), tiefeTsd: Math.round((A + B) / 1e3) }; }
+    X.tech[c] = o;
+  }));
+}
+
+/* ---------- Die Abwägung ---------- */
+function prompt(X, S, K, P, N, news, now) {
+  const L = [], reg = S.reg ? S.reg.tr + ' · ' + S.reg.vol : 'unbekannt';
+  L.push(`JETZT: ${new Date(now).toISOString().slice(0, 16)} UTC`);
+  L.push(`\nDEIN KONTO (Spielgeld): ${r2(eqKI(K, P))} € (Start 1000 €), frei ${r2(K.cash)} €. Offene Positionen:`);
+  for (const c in K.pos) { const p = K.pos[c], e = eqPos(p, P[c]); L.push(`- ${c} ${p.side > 0 ? 'LONG' : 'SHORT'} ${p.lev}x, Einstieg ${p.entry.toPrecision(6)}, Stop ${p.sl.toPrecision(6)}, Ziel ${p.tp ? p.tp.toPrecision(6) : '–'}, Einsatz ${r2(p.margin)} €, Ergebnis ${r2(e - p.margin)} € · damaliger Grund: ${p.grund.slice(0, 160)}`); }
+  if (!Object.keys(K.pos).length) L.push('- keine');
+  if (K.closed.length) { L.push('Deine letzten abgeschlossenen Trades (lerne daraus):'); for (const t of K.closed.slice(0, 8)) L.push(`- ${t.c} ${t.side > 0 ? 'Long' : 'Short'} ${t.lev}x: ${t.pct >= 0 ? '+' : ''}${t.pct} % (${t.why}) · Grund war: ${String(t.grund).slice(0, 100)}`); }
+  if (N.stats && N.stats.all && N.stats.all.n) L.push(`Trefferquote deiner 24h-Prognosen bisher: ${N.stats.all.ok}/${N.stats.all.n}.`);
+  if (K.dec.length) L.push(`Deine letzte Einschätzung (${new Date(K.dec[0].t).toISOString().slice(5, 16)}): ${K.dec[0].lage}`);
+  L.push(`\nREGEL-BOT (getestet 2020–2026): erkannte Marktphase ${reg}. Wochenplan: ${Object.entries(S.w || {}).filter(([, x]) => x > 0.01).map(([v, x]) => (VARS[v] ? VARS[v].n : v) + ' ' + Math.round(x * 100) + '%').join(', ')}. Seine offenen Positionen: ${(() => { const o = []; for (const v in S.vars) if (S.units[v] > 0) for (const c of COINS) { const p = S.vars[v].acc[c].pos; if (p) o.push(`${c} ${p.side > 0 ? 'Long' : 'Short'} (${v})`); } return o.join(', ') || 'keine'; })()}`);
+  L.push('\nTECHNIK je Coin (Binance-Kerzen; Veränderungen in %, Volumen 24h im Vergleich zum Schnitt der Vorwoche, Orderbuch: Anteil Kaufaufträge im Bereich ±1 %):');
+  for (const c of COINS) if (X.tech && X.tech[c]) L.push(`${c}: ${JSON.stringify(X.tech[c])}`);
+  L.push('\nDERIVATE je Coin (OKX-Futures – Binance-Futures sperren Cloud-Server): fundingProzent = Finanzierungssatz in % pro 8h (positiv = Longs zahlen, Markt überwiegend long; über 0,03 % = überhitzt), ls = Verhältnis Konten long/short, oi = offene Positionen in Mio $ und Änderung 24h %, liq = zuletzt liquidierte Longs/Shorts in $ über die genannten Stunden:');
+  for (const c of COINS) if (X.der && X.der[c]) { const { funding, ...o } = X.der[c]; L.push(`${c}: ${JSON.stringify(o)}`); }
+  if (X.fg) L.push(`\nANGST-&-GIER-INDEX Krypto: ${X.fg.v} (${X.fg.txt}), vor 7 Tagen ${X.fg.vor7}.`);
+  if (X.global) L.push(`Gesamter Kryptomarkt: ${X.global.mcap} Mrd $ (24h ${X.global.mcap24} %), BTC-Dominanz ${X.global.btcDom} %.`);
+  if (X.makro && Object.keys(X.makro).length) L.push('MAKRO (Preis, 1 Tag %, 5 Tage %): ' + Object.entries(X.makro).map(([n, o]) => `${n} ${o.p} (${o.d1}/${o.d5})`).join('; '));
+  if (X.cal && X.cal.length) L.push('WICHTIGE TERMINE (Wirtschaftskalender, UTC): ' + X.cal.map(e => `${new Date(e.t).toISOString().slice(5, 16)} ${e.land} ${e.name}${e.prog ? ' (Prognose ' + e.prog + ', vorher ' + e.vorher + ')' : ''}`).join('; '));
+  L.push('\nSCHLAGZEILEN (letzte 36 h, Nummer in eckigen Klammern):');
+  news.slice(0, 30).forEach((n, i) => L.push(`[${i}] (${n.coins.join(',')}) ${n.title}`));
+  return L.join('\n');
+}
+const SYS = `Du bist ein erfahrener, nüchterner Krypto-Trader und verwaltest ein Spielgeld-Konto mit Futures (Long und Short, Hebel 1–10x).
+Wäge ALLE Daten gegeneinander ab: Technik, Derivate (Funding, Long/Short-Verhältnis, offene Positionen, Liquidationen), Orderbuch, Stimmung (Angst & Gier), Makro (Aktien, Dollar, Zinsen, Gold, VIX), Termine, Nachrichten, die Meinung des Regel-Bots und deine eigenen letzten Trades.
+Regeln für dich: Handle nur, wenn mehrere Dinge in dieselbe Richtung zeigen. Nichts tun ist oft die beste Entscheidung. Hoher Hebel nur bei sehr klarer Lage und engem Stop. Setze immer einen Stop (Preis) und wenn sinnvoll ein Ziel (Preis). Einsatz = Prozent deines Kontos als Sicherheitsleistung (1–25). Lass Gewinner laufen, schließe, wenn der Grund weg ist.
+Schreibe auf Deutsch in einfachen, kurzen Sätzen (der Leser hat eine Lese-Rechtschreib-Schwäche). Erfinde nichts. Nenne Schlagzeilen nie als Nummer im Text, sondern mit Inhalt. Antworte NUR mit gültigem JSON.`;
+const FORMAT = `
+Antworte in genau diesem JSON-Format:
+{"lage":"3-4 Sätze: Was ist gerade los und was ist am wichtigsten?",
+ "faktoren":[{"name":"z.B. Angst-Index 11","wirkung":"positiv|negativ|neutral","warum":"kurz"}],
+ "coins":{"BTC":{"richtung":"steigt|fällt|seitwärts","sicherheit":0-100,"gruende":["...","..."],"news":[Nummern]}, "ETH":{...}, "SOL":{...}, "BNB":{...}, "XRP":{...}, "DOGE":{...}},
+ "entscheidungen":[{"coin":"BTC","aktion":"long|short|halten|schliessen","hebel":1-10,"einsatz":1-25,"stop":Preis,"ziel":Preis,"sicherheit":0-100,"grund":"2-3 Sätze, warum genau jetzt"}],
+ "risiken":["was deine Einschätzung kippen könnte"]}
+"faktoren": die 6-10 wichtigsten Einflüsse. "entscheidungen": nur Coins, bei denen du etwas tust oder eine offene Position hältst (bei halten darfst du Stop/Ziel anpassen). Leere Liste ist erlaubt.`;
+
+export async function kiStep(env, S, getJSON, now) {
+  const slot = Math.floor(now / 7200e3);
+  let X = JSON.parse(await env.STATE.get('ctx') || 'null');
+  if (!X || X.slot !== slot) { const N0 = JSON.parse(await env.STATE.get('news') || 'null'); if (N0 && N0.slot === slot && N0.ki) return null; X = { slot, stage: 0 }; }
+  if (X.stage >= 4) return null;
+  if (X.stage === 0) { await stageMarkt(X); X.stage = 1; await env.STATE.put('ctx', JSON.stringify(X)); return 'markt'; }
+  if (X.stage === 1) { await stageDerivate(X); X.stage = 2; await env.STATE.put('ctx', JSON.stringify(X)); return 'derivate'; }
+  if (X.stage === 2) { await stageTechnik(X, getJSON); X.stage = 3; await env.STATE.put('ctx', JSON.stringify(X)); return 'technik'; }
+  // Stufe 3: Nachrichten + Abwägung + Handeln
+  const K = S.ki, P = { ...S.px };
+  let N = JSON.parse(await env.STATE.get('news') || 'null') || { open: [], hist: [], stats: {} };
+  grade(N, P, now);
+  for (const c in X.der || {}) if (X.der[c].funding != null) K.fundRate[c] = X.der[c].funding;
+  const news = await fetchNews();
+  let out = null, raw = '';
+  if (env.AI) {
+    try {
+      const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'system', content: SYS }, { role: 'user', content: prompt(X, S, K, P, N, news, now) + FORMAT }], max_tokens: 2200, temperature: 0.25 });
+      raw = typeof r.response === 'string' ? r.response : JSON.stringify(r.response);
+      out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    } catch (e) { out = null; raw = String(e).slice(0, 300) + ' ' + raw.slice(0, 300); }
+  }
+  const notes = [], fc = { at: now, reg: S.reg ? S.reg.tr + ' · ' + S.reg.vol : '–', quelle: out ? 'KI (Llama 3.3 70B)' : 'KI nicht erreichbar – keine neuen Trades', coins: {}, faktoren: [], risiken: [], markt: '' };
+  if (out) {
+    fc.markt = String(out.lage || '').slice(0, 800);
+    fc.faktoren = (out.faktoren || []).slice(0, 12).map(f => ({ name: String(f.name || '').slice(0, 80), wirkung: String(f.wirkung || 'neutral'), warum: String(f.warum || '').slice(0, 200) }));
+    fc.risiken = (out.risiken || []).slice(0, 5).map(s => String(s).slice(0, 240));
+    for (const c of COINS) { const o = out.coins && out.coins[c]; if (!o) continue; const dir = /steig/i.test(o.richtung) ? 'steigt' : /f[äa]ll/i.test(o.richtung) ? 'fällt' : 'seitwärts';
+      fc.coins[c] = { richtung: dir, sicherheit: Math.max(0, Math.min(100, Math.round(+o.sicherheit || 0))), gruende: (o.gruende || []).slice(0, 4).map(s => String(s).replace(/^\s*\(?Schlagzeile\s*\[?\d+\]?\)?\s*:?\s*/i, '').slice(0, 240)),
+        news: (o.news || []).map(i => news[+i]).filter(Boolean).slice(0, 3).map(n => n.title), px: P[c], tech: X.tech && X.tech[c] ? { ch1: X.tech[c].h24, ch7: X.tech[c].d7, rsi: X.tech[c].rsiTag, trend: X.tech[c].trendTag } : null }; }
+    const decs = Array.isArray(out.entscheidungen) ? out.entscheidungen.slice(0, 6) : [];
+    for (const d of decs) execute(K, d, P, X.tech || {}, now, notes);
+    K.dec.unshift({ t: now, lage: fc.markt, ent: decs.map(d => ({ coin: d.coin, aktion: d.aktion, hebel: d.hebel, einsatz: d.einsatz, stop: d.stop, ziel: d.ziel, grund: String(d.grund || '').slice(0, 400) })), notes });
+    if (K.dec.length > 40) K.dec.length = 40;
+    if (slot % 3 === 0 || !N.fc) for (const c in fc.coins) if (P[c]) N.open.push({ t: now, c, richtung: fc.coins[c].richtung, sicherheit: fc.coins[c].sicherheit, px: P[c] });
+  }
+  if (N.open.length > 200) N.open.splice(0, N.open.length - 200);
+  N.fc = fc; N.slot = slot; N.at = now; N.ki = true; N.raw = out ? '' : raw;
+  N.news = news.map(n => ({ t: n.t, title: n.title, link: n.link, src: n.src, coins: n.coins, sent: n.sent }));
+  N.daten = { fg: X.fg, global: X.global, makro: X.makro, cal: X.cal, der: X.der, tech: X.tech };
+  await env.STATE.put('news', JSON.stringify(N));
+  X.stage = 4; await env.STATE.put('ctx', JSON.stringify(X));
+  return 'entscheidung';
+}

@@ -33,7 +33,7 @@ export function score(title) {
   const coins = Object.keys(TAGS).filter(k => TAGS[k].test(title));
   return { sent: Math.max(-1, Math.min(1, (p - n) / 2)), coins };
 }
-async function fetchNews() {
+export async function fetchNews() {
   const all = [];
   await Promise.all(FEEDS.map(async ([src, url]) => {
     try { const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Lern-Bot RSS)' }, cf: { cacheTtl: 300 } }); if (r.ok) all.push(...parseRSS(await r.text(), src)); } catch (e) { }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Lern-Bot ☁️ Live</title>
+<title>KI-Trader ☁️ Live</title>
 <style>
 :root{--bg:#000;--card:#0b0b0b;--card2:#151515;--line:#1f1f1f;--ink:#f2f2f2;--mute:#8a8a8a;--up:#22c55e;--down:#ef4444;--warn:#f2c14e;--blue:#5aa8ff}
 *{box-sizing:border-box}
@@ -50,13 +50,44 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 </head>
 <body>
 <div class="wrap">
-  <h1>Lern-Bot ☁️ Live</h1>
-  <div class="sub">Läuft rund um die Uhr in der Cloud – du musst nichts offen lassen. Erkennt die Marktphase und verteilt jeden Montag sein Geld auf die Varianten, die gerade passen. Spielgeld · <a href="lernbot-rueckblick.html">Rückblick 2020–2026 ▶</a></div>
+  <h1>KI-Trader ☁️ Live</h1>
+  <div class="sub">Läuft rund um die Uhr in der Cloud. Alle 2 Stunden sammelt er alles, was Kurse bewegen kann, wägt ab und entscheidet selbst über Trades und Hebel. Daneben läuft der getestete Regel-Bot als Vergleich. Spielgeld · <a href="lernbot-rueckblick.html">Rückblick Regel-Bot 2020–2026 ▶</a></div>
   <div class="status"><span class="dot" id="dot"></span><span id="st">Verbinde mit dem Cloud-Bot…</span></div>
 
   <div class="hero">
     <div class="card">
-      <div class="sub">Haupt-Konto · Start im Rückblick 2020 mit 1.000 €</div>
+      <div class="sub">🤖 KI-Trader · Start mit 1.000 €</div>
+      <div class="big" id="kEq">–</div>
+      <div id="kPct" class="sub">–</div>
+      <div class="sub" id="kInfo">–</div>
+    </div>
+    <div class="card">
+      <h2>Vergleich seit dem Neustart</h2>
+      <canvas id="cCmp" height="150" style="height:150px"></canvas>
+      <div class="legend"><span><span class="sw" style="background:#5aa8ff"></span>KI-Trader</span><span><span class="sw" style="background:#22c55e"></span>Regel-Bot</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🧠 Seine Abwägung</h2>
+    <div class="sub" id="aMeta">Die erste Abwägung kommt in den nächsten Minuten (Daten werden in 4 Schritten gesammelt).</div>
+    <p id="aLage" style="margin:8px 0"></p>
+    <div id="aFak" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div id="aEnt" style="margin-top:10px"></div>
+    <details style="margin-top:8px"><summary class="sub" style="cursor:pointer">Frühere Abwägungen</summary><div id="aHist" class="feed"></div></details>
+  </div>
+
+  <div class="card">
+    <h2>Positionen des KI-Traders</h2>
+    <div class="kpis"><div class="kpi"><span class="sub">Konto</span><b id="q1">–</b></div><div class="kpi"><span class="sub">Eigenes Geld in Trades</span><b id="q2">–</b></div><div class="kpi"><span class="sub">Positionen insgesamt</span><b id="q3">–</b></div><div class="kpi"><span class="sub">Gesamthebel</span><b id="q4">–</b></div></div>
+    <div class="scroll"><table><thead><tr><th>Coin</th><th>Richtung</th><th>Hebel</th><th class="n">Einsatz</th><th class="n">Position</th><th class="n">Einstieg</th><th class="n">Stop</th><th class="n">Ziel</th><th class="n">Liquidation</th><th class="n">Ergebnis</th></tr></thead><tbody id="kPos"></tbody></table></div>
+    <p class="note">Sicherheitsgrenzen im Code: Hebel höchstens 10x, höchstens 3 % Verlust pro Trade, Stop immer vor der Liquidation, höchstens 80 % des Kontos im Einsatz. Gebühren, Rutsch und echte Finanzierungssätze sind eingerechnet.</p>
+    <details><summary class="sub" style="cursor:pointer">Abgeschlossene Trades</summary><div class="scroll"><table><thead><tr><th>Zeit</th><th>Coin</th><th>Richtung</th><th class="n">Ergebnis</th><th>Ausstieg</th></tr></thead><tbody id="kClosed"></tbody></table></div></details>
+  </div>
+
+  <div class="hero">
+    <div class="card">
+      <div class="sub">📐 Regel-Bot (Vergleich) · Neustart mit 1.000 €</div>
       <div class="big" id="eq">–</div>
       <div id="live" class="sub">–</div>
       <div class="sub" id="dd">–</div>
@@ -70,7 +101,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 
   <div class="card" id="newsCard">
-    <h2>🧠 Was denkt der Bot? Nachrichten & Prognose (nächste 24 Stunden)</h2>
+    <h2>🔮 Prognosen je Coin (nächste 24 Stunden)</h2>
     <div class="sub" id="nMeta">Lade Analyse…</div>
     <p id="nMarkt" style="margin:8px 0 12px"></p>
     <div class="fc" id="nCoins"></div>
@@ -79,11 +110,16 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
       <div class="card" style="background:var(--card2)"><h2>Wie gut lagen seine Prognosen?</h2><div id="nAcc" class="sub">Noch keine Prognose geprüft – das geht frühestens 24 Stunden nach der ersten.</div></div>
       <div class="card" style="background:var(--card2)"><h2>Schlagzeilen, die er gelesen hat</h2><div id="nList" class="feed"></div></div>
     </div>
-    <p class="note">Die Prognosen werden alle 2 Stunden neu erstellt und nach 24 Stunden mit dem echten Kurs verglichen. Sie handeln noch nicht mit – erst wenn die Trefferquote über längere Zeit gut ist, lohnt es sich, sie einzubauen.</p>
+    <p class="note">Die Prognosen werden alle 2 Stunden neu erstellt und alle 6 Stunden eine davon nach 24 Stunden mit dem echten Kurs verglichen.</p>
   </div>
 
   <div class="card">
-    <h2>Übersicht: Wo ist der Bot drin?</h2>
+    <h2>📊 Alles, was er beobachtet</h2>
+    <div id="dat" class="sub">Wird gesammelt…</div>
+  </div>
+
+  <div class="card">
+    <h2>Positionen des Regel-Bots</h2>
     <div class="kpis"><div class="kpi"><span class="sub">Konto gesamt</span><b id="k1">–</b></div><div class="kpi"><span class="sub">Eigenes Geld in Trades</span><b id="k2">–</b></div><div class="kpi"><span class="sub">Positionen insgesamt</span><b id="k3">–</b></div><div class="kpi"><span class="sub">Gesamthebel</span><b id="k4">–</b></div></div>
     <div class="scroll"><table><thead><tr><th>Coin</th><th>Variante</th><th>Richtung</th><th>Hebel</th><th class="n">Eigenes Geld</th><th class="n">Position</th><th class="n">Einstieg</th><th class="n">Stop</th><th class="n">Ergebnis</th></tr></thead><tbody id="pos"></tbody></table></div>
     <p class="note">Beträge sind der Anteil des Haupt-Kontos. Jeder Einsatz ist ein Prozentsatz vom aktuellen Konto – wächst das Konto, wird automatisch mehr eingesetzt.</p>
@@ -92,13 +128,13 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
   <div class="card">
     <h2>Kerzen & Einstiege</h2>
     <div class="tabs" id="cTabs"></div>
-    <canvas id="cK" height="280"></canvas>
+    <canvas id="cK" height="280" style="height:280px"></canvas>
     <div class="legend"><span>▲ Long / Kauf</span><span>▼ Short</span><span>◆ Nachkauf</span><span><span class="sw" style="background:var(--up)"></span>Ausstieg mit Gewinn</span><span><span class="sw" style="background:var(--down)"></span>Ausstieg mit Verlust</span><span>- - Einstieg / Stop</span></div>
   </div>
 
   <div class="card">
-    <h2>Haupt-Konto seit 2020</h2>
-    <canvas id="cEq" height="200"></canvas>
+    <h2>Regel-Bot seit dem Neustart</h2>
+    <canvas id="cEq" height="200" style="height:200px"></canvas>
   </div>
 
   <div class="hero">
@@ -137,14 +173,19 @@ async function loadK(c){const srcs=[...(URL_?[URL_.replace(/\/$/,'')+`/api/k?c=$
 async function loadPx(){try{const r=await fetch('https://data-api.binance.vision/api/v3/ticker/price?symbols='+encodeURIComponent(JSON.stringify(COINS.map(c=>c+'USDT'))),{cache:'no-store'});if(r.ok)for(const x of await r.json())live[x.symbol.replace('USDT','')]=+x.price}catch(e){}}
 function drawK(){const ks=K[coin];if(!ks||ks==='err'||!S){const[g,W,H]=cv('cK');g.fillStyle='#8a8a8a';g.font='14px Inter,sans-serif';g.fillText(ks==='err'?'Kerzen konnten gerade nicht geladen werden – neuer Versuch in 2 Minuten.':'Lade Kerzen…',12,30);return}const[g,W,H]=cv('cK'),R=64;let lo=Infinity,hi=-Infinity;for(const k of ks){lo=Math.min(lo,k.l);hi=Math.max(hi,k.h)}
   const open=[];for(const v in S.vars){if(!(S.units[v]>0))continue;const p=S.vars[v].acc[coin].pos;if(p){open.push([v,p]);lo=Math.min(lo,p.mid,p.sl||p.mid);hi=Math.max(hi,p.mid,p.sl||p.mid)}}
-  const pad=(hi-lo)*0.06;lo-=pad;hi+=pad;const cw=(W-R)/ks.length,x=j=>(j+0.5)*cw,y=v=>8+(hi-v)/(hi-lo)*(H-24),t0=ks[0].t,xt=t=>x((t-t0)/(4*3600e3)-1);
+  if(S.ki&&S.ki.pos[coin]){const p=S.ki.pos[coin];for(const v of [p.entry,p.sl,p.tp])if(v&&v>lo*0.85&&v<hi*1.15){lo=Math.min(lo,v);hi=Math.max(hi,v)}}const pad=(hi-lo)*0.06;lo-=pad;hi+=pad;const cw=(W-R)/ks.length,x=j=>(j+0.5)*cw,y=v=>8+(hi-v)/(hi-lo)*(H-24),t0=ks[0].t,xt=t=>x((t-t0)/(4*3600e3)-1);
   g.font='11px Inter,sans-serif';for(let q=0;q<=4;q++){const v=lo+(hi-lo)*q/4;g.strokeStyle='#161616';g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle='#8a8a8a';g.fillText(px(v),W-R+4,y(v)+4)}
   ks.forEach((k,j)=>{g.strokeStyle=g.fillStyle=k.c>=k.o?'#22c55e':'#ef4444';g.beginPath();g.moveTo(x(j),y(k.h));g.lineTo(x(j),y(k.l));g.stroke();const t=Math.min(y(k.o),y(k.c));g.fillRect(x(j)-Math.max(1,cw*0.35),t,Math.max(2,cw*0.7),Math.max(1,Math.abs(y(k.o)-y(k.c))))});
   for(const [v,p] of open){g.setLineDash([5,4]);g.strokeStyle='#f2f2f2';g.beginPath();g.moveTo(0,y(p.mid));g.lineTo(W-R,y(p.mid));g.stroke();if(p.sl){g.strokeStyle='#ef4444';g.beginPath();g.moveTo(0,y(p.sl));g.lineTo(W-R,y(p.sl));g.stroke()}g.setLineDash([]);g.fillStyle='#f2f2f2';g.fillText(VN[v]+(p.kind==='lev'?' · '+(p.qty*P(coin)/eqA(S.vars[v].acc[coin],coin)).toFixed(1).replace('.',',')+'x':''),4,y(p.mid)-4)}
-  g.textAlign='center';g.font='bold 13px Inter,sans-serif';
+  g.textAlign='center';g.font='bold 11px Inter,sans-serif';g.globalAlpha=0.45;
   for(const e of S.ev){if(e.c!==coin||e.v==='main'||!(S.units[e.v]>0)||e.t<t0)continue;const X=xt(e.t),Y=y(e.px);if(X<0||X>W-R)continue;
     if(e.io==='in'){g.fillStyle=e.side>0?'#22c55e':'#ef4444';g.fillText(e.side>0?'▲':'▼',X,e.side>0?Y+14:Y-4)}else if(e.io==='add'){g.fillStyle='#5aa8ff';g.fillText('◆',X,Y+4)}else{g.fillStyle=e.pnl>=0?'#22c55e':'#ef4444';g.beginPath();g.arc(X,Y,4,0,7);g.fill()}}
-  g.textAlign='start';g.font='11px Inter,sans-serif';g.fillStyle='#8a8a8a';g.fillText(coin+'/USDT · 4-Stunden-Kerzen',4,H-3)}
+  g.globalAlpha=1;g.textAlign='start';
+  // KI-Trader: Einstiege, Ausstiege, offene Linien (blau umrandet, mit „KI“)
+  const K=S.ki;if(K){const mk=(t,pr,txt,col)=>{const X=xt(t),Y=y(pr);if(X<0||X>W-R||Y<0||Y>H)return;g.fillStyle=col;g.font='bold 15px Inter,sans-serif';g.textAlign='center';g.fillText(txt,X,Y+5);g.font='bold 9px Inter,sans-serif';g.fillStyle='#5aa8ff';g.fillText('KI',X,Y-9);g.textAlign='start'};
+    for(const t of K.closed)if(t.c===coin){if(t.t0>=t0)mk(t.t0,t.entry,t.side>0?'▲':'▼',t.side>0?'#22c55e':'#ef4444');if(t.t>=t0)mk(t.t,t.exit,'●',t.pnl>=0?'#22c55e':'#ef4444')}
+    const p=K.pos[coin];if(p){if(p.t>=t0)mk(p.t,p.entry,p.side>0?'▲':'▼',p.side>0?'#22c55e':'#ef4444');g.setLineDash([6,4]);for(const [v,col,lb] of [[p.entry,'#5aa8ff','KI Einstieg '+p.lev+'x'],[p.sl,'#ef4444','KI Stop'],[p.tp,'#22c55e','KI Ziel']]){if(!v||v<lo||v>hi)continue;g.strokeStyle=col;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillStyle=col;g.font='11px Inter,sans-serif';g.fillText(lb,W-R-110,y(v)-4)}g.setLineDash([])}}
+  g.font='11px Inter,sans-serif';g.fillStyle='#8a8a8a';g.fillText(coin+'/USDT · 4-Stunden-Kerzen · blasse Zeichen = Regel-Bot',4,H-3)}
 function drawEq(){const[g,W,H]=cv('cEq'),R=58,a=[...S.mainD,...(S.mainI||[]).filter(p=>p[0]>(S.mainD.length?S.mainD[S.mainD.length-1][0]:0))];if(a.length<2)return;
   let lo=Infinity,hi=-Infinity;for(const p of a){lo=Math.min(lo,p[1]);hi=Math.max(hi,p[1])}lo=Math.min(lo,900);const t0=a[0][0],t1=a[a.length-1][0],x=t=>(t-t0)/(t1-t0)*(W-R),y=v=>H-16-(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo))*(H-26);
   g.font='11px Inter,sans-serif';g.strokeStyle='#1f1f1f';g.fillStyle='#8a8a8a';for(const v of [1000,2000,5000,10000,20000,50000,100000]){if(v<lo||v>hi)continue;g.beginPath();g.moveTo(0,y(v));g.lineTo(W-R,y(v));g.stroke();g.fillText((v/1000)+'k €',W-R+4,y(v)+4)}
@@ -155,7 +196,7 @@ let NW=null;
 async function pullN(){try{if(!URL_){const r=await fetch('cloud-url.json?'+Date.now(),{cache:'no-store'});if(r.ok)URL_=(await r.json()).url}if(!URL_)return;
   const r=await fetch(URL_.replace(/\/$/,'')+'/api/news?'+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(j&&j.fc){NW=j;renderN()}else $('nMeta').textContent='Die erste Analyse kommt in den nächsten 2 Stunden.'}catch(e){}}
 const DIR={steigt:['↗','var(--up)','steigt'],'fällt':['↘','var(--down)','fällt'],'seitwärts':['→','var(--warn)','seitwärts']};
-function renderN(){const f=NW.fc,ago=Math.round((Date.now()-f.at)/60000);
+function renderN(){if(S)renderKI();renderDat();const f=NW.fc,ago=Math.round((Date.now()-f.at)/60000);
   $('nMeta').textContent=`Analyse von ${tm(f.at)} (vor ${ago<60?ago+' Min':Math.round(ago/60)+' Std'}) · Quelle: ${f.quelle} · ${NW.news?NW.news.length:0} Schlagzeilen gelesen · Marktphase: ${f.reg}`;
   $('nMarkt').textContent=f.markt||'';
   $('nCoins').innerHTML=COINS.filter(c=>f.coins[c]).map(c=>{const o=f.coins[c],d=DIR[o.richtung]||DIR['seitwärts'],t=o.tech||{};
@@ -169,8 +210,42 @@ function renderN(){const f=NW.fc,ago=Math.round((Date.now()-f.at)/60000);
     <table style="margin-top:8px"><tbody>${COINS.filter(c=>st[c]).map(c=>`<tr><td>${c}</td><td class="n">${st[c].ok}/${st[c].n}</td><td class="n">${Math.round(st[c].ok/st[c].n*100)} %</td></tr>`).join('')}</tbody></table>
     <div style="margin-top:8px">${(NW.hist||[]).slice(0,8).map(h=>`<div class="sub">${h.ok?'✅':'❌'} ${tm(h.t)} · ${h.c} „${h.richtung}“ → tatsächlich ${h.ch>=0?'+':''}${String(h.ch).replace('.',',')} %</div>`).join('')}</div>`}
   $('nList').innerHTML=(NW.news||[]).slice(0,25).map(n=>`<div class="nw"><span class="s" style="background:${n.sent>0.2?'var(--up)':n.sent<-0.2?'var(--down)':'#666'}"></span><span>${n.link&&/^https?:/.test(n.link)?`<a href="${esc(n.link)}" target="_blank" rel="noopener">${esc(n.title)}</a>`:esc(n.title)}<br><span class="sub">${esc(n.src)} · ${tm(n.t)} · ${n.coins.join(', ')}</span></span></div>`).join('')||'<div class="sub">Keine Schlagzeilen.</div>'}
+
+const kEqP=(p,pr)=>{const ex=pr*(1-p.side*SLIP);return Math.max(0,p.margin+p.side*(ex-p.entry)*p.qty-ex*p.qty*FFEE-p.fund)};
+function kiEq(){const K=S.ki;let s=K.cash;for(const c in K.pos)s+=kEqP(K.pos[c],P(c)||K.pos[c].entry);return s}
+const usd=x=>x>=1e6?(x/1e6).toFixed(1).replace('.',',')+' Mio $':Math.round(x/1e3).toLocaleString('de-DE')+'k $';
+const WK={positiv:'var(--up)',negativ:'var(--down)',neutral:'#8a8a8a'};
+function renderKI(){const K=S.ki;if(!K)return;const e=kiEq();
+  $('kEq').textContent=eur(e);$('kPct').innerHTML=`<span class="${e>=1000?'up':'down'}">${e>=1000?'+':''}${eur(e-1000)} (${((e/1000-1)*100).toFixed(2).replace('.',',')} %)</span> seit ${tm(K.t0)}`;
+  const nx=new Date();nx.setUTCMinutes(0,0,0);nx.setUTCHours(nx.getUTCHours()+(nx.getUTCHours()%2===1?2:1));
+  $('kInfo').textContent=`Trades: ${K.n} abgeschlossen${K.n?' · '+Math.round(K.win/K.n*100)+' % mit Gewinn':''} · Rückgang vom Hoch ${Math.round((K.peak-e)/K.peak*100)} % · nächste Abwägung ab ${nx.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`;
+  let own=0,not=0;const rows=[];for(const c in K.pos){const p=K.pos[c],pr=P(c)||p.entry,v=kEqP(p,pr),res=v-p.margin;own+=p.margin;not+=p.qty*pr;
+    rows.push(`<tr><td><b>${c}</b></td><td class="${p.side>0?'up':'down'}">${p.side>0?'Long':'Short'}</td><td><span class="badge">${p.lev}x</span></td><td class="n">${eur(p.margin)}</td><td class="n">${eur(p.qty*pr)}</td><td class="n">${px(p.entry)}</td><td class="n">${px(p.sl)}</td><td class="n">${p.tp?px(p.tp):'–'}</td><td class="n">${px(p.liq)}</td><td class="n ${res>=0?'up':'down'}">${res>=0?'+':''}${eur(res)} (${(res/p.margin*100).toFixed(1).replace('.',',')} %)</td></tr><tr><td colspan="10" class="sub" style="border-bottom:1px solid var(--line)">💬 ${esc(p.grund)}</td></tr>`)}
+  $('kPos').innerHTML=rows.join('')||'<tr><td colspan="10" class="sub">Gerade keine Position – er wartet, bis mehrere Dinge in dieselbe Richtung zeigen.</td></tr>';
+  $('q1').textContent=eur(e);$('q2').textContent=eur(own);$('q3').textContent=eur(not);$('q4').textContent=(not/e).toFixed(2).replace('.',',')+'x';
+  $('kClosed').innerHTML=K.closed.slice(0,40).map(t=>`<tr><td>${tm(t.t)}</td><td>${t.c}</td><td class="${t.side>0?'up':'down'}">${t.side>0?'Long':'Short'} ${t.lev}x</td><td class="n ${t.pnl>=0?'up':'down'}">${t.pnl>=0?'+':''}${eur(t.pnl)} (${String(t.pct).replace('.',',')} %)</td><td>${esc(t.why)}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">Noch keine.</td></tr>';
+  const d=K.dec[0];
+  if(d){$('aMeta').textContent=`Abwägung von ${tm(d.t)}${NW&&NW.fc?' · '+NW.fc.quelle:''}`;$('aLage').textContent=d.lage||'';
+    $('aEnt').innerHTML=(d.ent&&d.ent.length?d.ent.map(x=>{const a=String(x.aktion||'').toLowerCase(),col=/long/.test(a)?'var(--up)':/short/.test(a)?'var(--down)':'var(--warn)';return`<div class="fcc" style="margin-top:8px"><b>${esc(x.coin)}</b> · <b style="color:${col}">${esc(String(x.aktion).toUpperCase())}</b>${/long|short/.test(a)?` · Hebel ${esc(x.hebel)}x · Einsatz ${esc(x.einsatz)} % · Stop ${esc(x.stop)} · Ziel ${esc(x.ziel??'–')}`:''}<div style="margin-top:4px">${esc(x.grund)}</div></div>`}).join(''):'<div class="fcc" style="margin-top:8px">Entscheidung: <b>nichts tun</b> – die Lage ist ihm nicht klar genug.</div>')
+      +(d.notes&&d.notes.length?`<p class="note">🛡️ Umsetzung: ${d.notes.map(esc).join(' · ')}</p>`:'');
+    $('aHist').innerHTML=K.dec.slice(1,15).map(x=>`<div><b>${tm(x.t)}</b> · ${esc(x.lage)}<br><span class="sub">${x.ent&&x.ent.length?x.ent.map(e=>esc(e.coin+' '+e.aktion)).join(', '):'nichts getan'}</span></div>`).join('')||'<div class="sub">Noch keine.</div>'}
+  else $('aMeta').textContent='Die erste Abwägung kommt in den nächsten Minuten'+(S.kiStage?` (Stand: ${S.kiStage} gesammelt)`:'')+'.';
+  drawCmp()}
+function drawCmp(){const K=S.ki;if(!K)return;const[g,W,H]=cv('cCmp'),A=K.eqH.concat([[Date.now(),kiEq()]]),B=(S.mainI||[]).filter(p=>p[0]>=K.t0).concat([[Date.now(),eqMain()]]);
+  const all=A.concat(B);let lo=Math.min(...all.map(p=>p[1]),990),hi=Math.max(...all.map(p=>p[1]),1010);const t0=K.t0,t1=Date.now(),x=t=>(t-t0)/Math.max(1,t1-t0)*(W-50),y=v=>8+(hi-v)/(hi-lo)*(H-20);
+  g.font='11px Inter,sans-serif';g.strokeStyle='#1f1f1f';g.fillStyle='#8a8a8a';for(const v of [lo,1000,hi]){g.beginPath();g.moveTo(0,y(v));g.lineTo(W-50,y(v));g.stroke();g.fillText(Math.round(v)+' €',W-46,y(v)+4)}
+  for(const [a,col] of [[B,'#22c55e'],[A,'#5aa8ff']]){if(a.length<2)continue;g.strokeStyle=col;g.lineWidth=2;g.beginPath();a.forEach((p,i)=>i?g.lineTo(x(p[0]),y(p[1])):g.moveTo(x(p[0]),y(p[1])));g.stroke()}g.lineWidth=1}
+function renderDat(){const D=NW&&NW.daten;if(!D){return}const h=[];
+  if(D.fg)h.push(`<div class="kpis"><div class="kpi"><span class="sub">Angst & Gier (Krypto)</span><b class="${D.fg.v<25?'down':D.fg.v>75?'up':''}">${D.fg.v} · ${esc(D.fg.txt)}</b><span class="sub">vor 7 Tagen: ${D.fg.vor7??'–'}</span></div>`+(D.global?`<div class="kpi"><span class="sub">Kryptomarkt gesamt</span><b>${D.global.mcap.toLocaleString('de-DE')} Mrd $</b><span class="sub">24h ${D.global.mcap24} %</span></div><div class="kpi"><span class="sub">BTC-Dominanz</span><b>${String(D.global.btcDom).replace('.',',')} %</b></div>`:'')+`</div>`);
+  if(D.makro&&Object.keys(D.makro).length)h.push(`<h2 style="margin-top:10px">Weltmärkte</h2><table><thead><tr><th>Markt</th><th class="n">Stand</th><th class="n">1 Tag</th><th class="n">5 Tage</th></tr></thead><tbody>${Object.entries(D.makro).map(([n,o])=>`<tr><td>${esc(n)}</td><td class="n">${o.p.toLocaleString('de-DE')}</td><td class="n ${o.d1>=0?'up':'down'}">${o.d1} %</td><td class="n ${o.d5>=0?'up':'down'}">${o.d5} %</td></tr>`).join('')}</tbody></table>`);
+  if(D.cal&&D.cal.length)h.push(`<h2 style="margin-top:10px">Wichtige Termine</h2>${D.cal.map(e=>`<div class="sub">📅 ${tm(e.t)} · ${esc(e.land)} · ${esc(e.name)}${e.prog?' · erwartet '+esc(e.prog)+' (vorher '+esc(e.vorher)+')':''}</div>`).join('')}`);
+  if(D.der)h.push(`<h2 style="margin-top:10px">Futures-Markt (OKX)</h2><div class="scroll"><table><thead><tr><th>Coin</th><th class="n">Finanzierung / 8h</th><th class="n">Konten Long : Short</th><th class="n">Offene Positionen</th><th class="n">Liquidiert Longs / Shorts</th></tr></thead><tbody>${COINS.filter(c=>D.der[c]).map(c=>{const o=D.der[c];return`<tr><td><b>${c}</b></td><td class="n">${o.fundingProzent!=null?String(o.fundingProzent).replace('.',',')+' %':'–'}</td><td class="n">${o.ls?String(o.ls.jetzt).replace('.',',')+' : 1 <span class="sub">(vor 24h '+String(o.ls.vor24h).replace('.',',')+')</span>':'–'}</td><td class="n">${o.oi?o.oi.mio.toLocaleString('de-DE')+' Mio $ <span class="'+(o.oi.ch24>=0?'up':'down')+'">'+o.oi.ch24+' %</span>':'–'}</td><td class="n">${o.liq?usd(o.liq.longs)+' / '+usd(o.liq.shorts):'–'}</td></tr>`}).join('')}</tbody></table></div><p class="note">Binance sperrt seine Futures-Daten für Cloud-Server in den USA, deshalb kommen Finanzierung, Long/Short, offene Positionen und Liquidationen von OKX (zweitgrößte Futures-Börse). Kerzen und Preise kommen weiter von Binance.</p>`);
+  if(D.tech)h.push(`<h2 style="margin-top:10px">Technik</h2><div class="scroll"><table><thead><tr><th>Coin</th><th class="n">4h</th><th class="n">24h</th><th class="n">7 Tage</th><th class="n">30 Tage</th><th class="n">RSI Tag</th><th>Trend 1h / Tag</th><th class="n">Volumen</th><th class="n">Orderbuch Kauf</th></tr></thead><tbody>${COINS.filter(c=>D.tech[c]).map(c=>{const o=D.tech[c],f=x=>`<span class="${x>=0?'up':'down'}">${x>=0?'+':''}${String(x).replace('.',',')} %</span>`;return`<tr><td><b>${c}</b></td><td class="n">${f(o.h4)}</td><td class="n">${f(o.h24)}</td><td class="n">${f(o.d7)}</td><td class="n">${f(o.d30)}</td><td class="n">${o.rsiTag}</td><td>${o.trend1h} / ${o.trendTag}</td><td class="n">${String(o.volumen24hVsSchnitt).replace('.',',')}×</td><td class="n">${o.orderbuch?o.orderbuch.kaufSeiteProzent+' %':'–'}</td></tr>`}).join('')}</tbody></table></div>`);
+  h.push(`<p class="note">Dazu: ${NW.news?NW.news.length:0} Schlagzeilen (unten), die Marktphase und Positionen des Regel-Bots und seine eigenen letzten Trades. Nicht dabei: On-Chain-Daten (Wallet-Bewegungen) – dafür gibt es keine kostenlose Quelle für Cloud-Server.</p>`);
+  $('dat').innerHTML=h.join('');
+  if(NW.fc&&NW.fc.faktoren)$('aFak').innerHTML=NW.fc.faktoren.map(f=>`<span class="chip" title="${esc(f.warum)}" style="border-color:${WK[f.wirkung]||'#444'};font-weight:600;border-radius:10px;text-align:left">${f.wirkung==='positiv'?'▲':f.wirkung==='negativ'?'▼':'•'} ${esc(f.name)}<span class="sub" style="font-weight:400"> – ${esc(f.warum)}</span></span>`).join('')}
 function render(){if(!S||!S.vars)return;const m=eqMain();let pk=S.mainPeak||m;pk=Math.max(pk,m);
-  $('eq').textContent=eur(m);const l0=S.liveEq0||m;$('live').innerHTML=`Seit Live-Start (${S.live0?tm(S.live0):'–'}): <span class="${m>=l0?'up':'down'}">${m>=l0?'+':''}${eur(m-l0)} (${((m/l0-1)*100).toFixed(2).replace('.',',')} %)</span> · seit 2020: ${((m/1000-1)*100).toFixed(0)} %`;
+  $('eq').textContent=eur(m);const l0=S.liveEq0||m;$('live').innerHTML=`Seit Neustart (${S.live0?tm(S.live0):'–'}): <span class="${m>=l0?'up':'down'}">${m>=l0?'+':''}${eur(m-l0)} (${((m/l0-1)*100).toFixed(2).replace('.',',')} %)</span>`;
   $('dd').textContent='Rückgang vom Hoch: '+Math.round((pk-m)/pk*100)+' %';
   const r=S.reg?S.reg.tr+' · '+S.reg.vol:'–';$('reg').textContent=r;$('reg').style.background=(RC[r]||'#333')+'40';
   $('wts').innerHTML=Object.keys(VN).map(v=>[S.w[v]||0,v]).sort((a,b)=>b[0]-a[0]).map(([x,v])=>`<div class="wbar"><span>${VN[v]}</span><span class="tr"><i style="width:${x*100}%;background:${VC[v]}"></i></span><span style="text-align:right">${Math.round(x*100)} %</span></div>`).join('');
@@ -184,14 +259,14 @@ function render(){if(!S||!S.vars)return;const m=eqMain();let pk=S.mainPeak||m;pk
   $('vt').innerHTML=Object.keys(VN).map(v=>[eqV(v),v]).sort((a,b)=>b[0]-a[0]).map(([x,v])=>{const s=sc[v];return`<tr><td><span class="sw" style="background:${VC[v]}"></span>${VN[v]}</td><td class="n ${v==='cash'?'':x>=1000?'up':'down'}">${eur0(x)}</td><td class="n">${v==='cash'?'–':s&&s.e!=null?`<span class="${s.e>0?'up':'down'}">${(s.e*10).toFixed(1).replace('.',',')}</span>`:'–'}</td><td class="n">${S.w[v]?Math.round(S.w[v]*100)+' %':'–'}</td></tr>`}).join('');
   const items=[...S.logs.map(l=>({t:l.t,h:`<b>${tm(l.t)}</b> · ${esc(l.msg)}`})),...S.ev.filter(e=>e.v!=='main'&&e.io!=='add'&&S.units[e.v]>0).slice(-60).map(e=>({t:e.t,h:e.io==='in'?`${tm(e.t)} · <b>${VN[e.v]}</b> · ${e.c} ${e.side>0?'<span class="up">LONG</span>':'<span class="down">SHORT</span>'} @ ${px(e.px)}${e.lev&&e.lev!==1?' · Hebel '+e.lev.toFixed(1).replace('.',',')+'x':''} – ${esc(e.why)}`:`${tm(e.t)} · <b>${VN[e.v]}</b> · ${e.c} raus (${esc(e.why)}) · <span class="${e.pnl>=0?'up':'down'}">${e.pct>=0?'+':''}${e.pct.toFixed(1).replace('.',',')} %</span>`}))].sort((a,b)=>b.t-a.t).slice(0,60);
   $('feed').innerHTML=items.map(i=>`<div>${i.h}</div>`).join('');
-  drawK();drawEq()}
+  renderKI();drawK();drawEq()}
 async function pull(){try{
   if(!URL_){const r=await fetch('cloud-url.json?'+Date.now(),{cache:'no-store'});if(r.ok)URL_=(await r.json()).url}
   if(!URL_){st('err','Cloud-Bot ist noch nicht eingerichtet');return}
   const r=await fetch(URL_.replace(/\/$/,'')+'/api/state?'+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;const s=await r.json();
   if(!s.vars){st('wait','Cloud-Bot startet – erster Lauf kommt in höchstens 5 Minuten');return}
-  S=s;const ago=Math.round((Date.now()-S.lastRun)/60000);st(ago<=10?'ok':'err',ago<=10?`Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`Letzter Cloud-Lauf vor ${ago} Min`);render()
-}catch(e){st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
+  S=s;const ago=Math.round((Date.now()-S.lastRun)/60000);st(ago<=10?'ok':'err',ago<=10?`Läuft in der Cloud · letzter Check vor ${ago} Min · prüft alle 5 Min`:`Letzter Cloud-Lauf vor ${ago} Min`);try{render()}catch(e){console.error('Anzeige-Fehler',e&&e.stack||e)}
+}catch(e){console.error('Abruf-Fehler',e&&e.stack||e);st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
 function st(c,t){$('dot').className='dot '+c;$('st').textContent=t}
 pull().then(()=>loadK(coin)).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin]==='err')delete K[coin];loadK(coin).then(drawK)},120000);
 new ResizeObserver(()=>{if(S){drawK();drawEq()}}).observe(document.body);

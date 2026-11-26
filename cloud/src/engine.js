@@ -79,6 +79,7 @@ export function eqA(a, c) {
   const ex = pr * (1 - p.side * SLIP); return a.cash + Math.max(0, p.margin + p.side * (ex - p.entry) * p.qty - ex * p.qty * FFEE - p.fund);
 }
 export function eqV(v) { let s = 0; for (const c of COINS) s += eqA(S.vars[v].acc[c], c); return s; }
+export const bind = st => { S = st; };
 export function eqMain() { let s = 0; for (const v of VK) s += S.units[v] * eqV(v); return s; }
 
 function closePos(v, c, why, price) {
