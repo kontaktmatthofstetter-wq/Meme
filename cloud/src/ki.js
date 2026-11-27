@@ -144,20 +144,44 @@ function prompt(X, S, K, P, N, news, now) {
   news.slice(0, 30).forEach((n, i) => L.push(`[${i}] (${n.coins.join(',')}) ${n.title}`));
   return L.join('\n');
 }
-const SYS = `Du bist ein erfahrener, nüchterner Krypto-Trader und verwaltest ein Spielgeld-Konto mit Futures (Long und Short, Hebel 1–10x).
-Wäge ALLE Daten gegeneinander ab: Technik, Derivate (Funding, Long/Short-Verhältnis, offene Positionen, Liquidationen), Orderbuch, Stimmung (Angst & Gier), Makro (Aktien, Dollar, Zinsen, Gold, VIX), Termine, Nachrichten, die Meinung des Regel-Bots und deine eigenen letzten Trades.
-Regeln für dich: Handle nur, wenn mehrere Dinge in dieselbe Richtung zeigen. Nichts tun ist oft die beste Entscheidung. Hoher Hebel nur bei sehr klarer Lage und engem Stop. Setze immer einen Stop (Preis) und wenn sinnvoll ein Ziel (Preis). Einsatz = Prozent deines Kontos als Sicherheitsleistung (1–25). Lass Gewinner laufen, schließe, wenn der Grund weg ist.
-Schreibe auf Deutsch in einfachen, kurzen Sätzen (der Leser hat eine Lese-Rechtschreib-Schwäche). Erfinde nichts. Nenne Schlagzeilen nie als Nummer im Text, sondern mit Inhalt. Antworte NUR mit gültigem JSON.`;
+const SYS = `Du bist ein aktiver, erfahrener Krypto-Trader und verwaltest ein Spielgeld-Konto mit Futures (Long und Short, Hebel 1–10x).
+Deine Aufgabe: Chancen finden und nutzen – in beide Richtungen. Ein fallender Markt ist genauso eine Chance (Short) wie ein steigender (Long).
+Bewerte bei JEDER Abwägung für JEDEN Coin ein Long-Setup und ein Short-Setup mit 0–100 Punkten. Die Punkte fassen zusammen: wie wahrscheinlich die Bewegung ist UND wie gut Chance zu Risiko ist.
+Ab 60 Punkten wird das Setup automatisch gehandelt. Gib also 60+ genau dann, wenn du als Profi jetzt einsteigen würdest. Extreme Angst allein ist kein Grund, nichts zu tun – sie kann für eine Gegenbewegung nach oben sprechen oder für einen fortgesetzten Abverkauf.
+Nach schnellen Abstürzen oder Anstiegen: Prüfe beide Möglichkeiten – Fortsetzung (mit dem Trend) oder Gegenbewegung (Rückprall). Liquidationswellen, Finanzierung und Long/Short-Verhältnis helfen dabei.
+Stop: hinter einer sinnvollen Marke (letztes Hoch/Tief, ca. 1–2 Tages-Schwankungen). Ziel: mindestens 1,5-mal so weit weg wie der Stop. Hebel: höher bei engem Stop und klarer Lage, niedriger bei weitem Stop.
+Nutze alle Daten: Technik, Derivate, Orderbuch, Stimmung, Makro, Termine, Nachrichten, die Meinung des Regel-Bots und deine eigenen letzten Trades.
+Schreibe auf Deutsch in einfachen, kurzen Sätzen (der Leser hat eine Lese-Rechtschreib-Schwäche). Erfinde nichts. Nenne Schlagzeilen nie als Nummer im Text. Antworte NUR mit gültigem JSON.`;
 const FORMAT = `
-Antworte in genau diesem JSON-Format:
-{"lage":"3-4 Sätze: Was ist gerade los und was ist am wichtigsten?",
- "faktoren":[{"name":"z.B. Angst-Index 11","wirkung":"positiv|negativ|neutral","warum":"kurz"}],
- "coins":{"BTC":{"richtung":"steigt|fällt|seitwärts","sicherheit":0-100,"gruende":["...","..."],"news":[Nummern]}, "ETH":{...}, "SOL":{...}, "BNB":{...}, "XRP":{...}, "DOGE":{...}},
- "entscheidungen":[{"coin":"BTC","aktion":"long|short|halten|schliessen","hebel":1-10,"einsatz":1-25,"stop":Preis,"ziel":Preis,"sicherheit":0-100,"grund":"2-3 Sätze, warum genau jetzt"}],
+Antworte in genau diesem JSON-Format (kurz halten!):
+{"lage":"2-3 Sätze: Was ist JETZT anders als vorhin, was ist am wichtigsten?",
+ "faktoren":[{"name":"z.B. Angst-Index 12","wirkung":"positiv|negativ|neutral","warum":"kurz"}],
+ "coins":{"BTC":{"richtung":"steigt|fällt|seitwärts","sicherheit":0-100,"gruende":["kurz","kurz"],"news":[Nummern],
+   "long":{"punkte":0-100,"stop":Preis,"ziel":Preis,"hebel":1-10,"einsatz":1-25,"grund":"1 Satz"},
+   "short":{"punkte":0-100,"stop":Preis,"ziel":Preis,"hebel":1-10,"einsatz":1-25,"grund":"1 Satz"}}, "ETH":{...}, "SOL":{...}, "BNB":{...}, "XRP":{...}, "DOGE":{...}},
+ "entscheidungen":[{"coin":"BTC","aktion":"halten|schliessen","stop":Preis,"ziel":Preis,"grund":"kurz"}],
  "risiken":["was deine Einschätzung kippen könnte"],
- "crashRisiko":0-100,"crashGruende":["warum ein starker Absturz (mehr als 15 % in wenigen Tagen) gerade wahrscheinlicher oder unwahrscheinlicher ist"],"notfall":false}
-"crashRisiko": deine ehrliche Schätzung, wie wahrscheinlich ein Crash in den nächsten Tagen ist (50 = deutlich erhöht, 80+ = akute Gefahr). "notfall": nur true, wenn JETZT etwas Schwerwiegendes passiert (z. B. große Börse stellt Auszahlungen ein, riesiger Hack, Panikverkauf läuft) – dann werden sofort alle Longs geschlossen.
-"faktoren": die 6-10 wichtigsten Einflüsse. "entscheidungen": nur Coins, bei denen du etwas tust oder eine offene Position hältst (bei halten darfst du Stop/Ziel anpassen). Leere Liste ist erlaubt.`;
+ "crashRisiko":0-100,"crashGruende":["kurz"],"notfall":false}
+"faktoren": die 5-8 wichtigsten Einflüsse. "entscheidungen": NUR für schon offene Positionen (halten mit neuem Stop/Ziel oder schliessen). Neue Trades entstehen automatisch aus Setups mit 60+ Punkten.
+"crashRisiko": deine ehrliche Schätzung für einen Absturz von mehr als 15 % in den nächsten Tagen. "notfall": nur true, wenn JETZT etwas Schwerwiegendes passiert (große Börse stoppt Auszahlungen, riesiger Hack, Panik läuft) – dann werden sofort alle Longs geschlossen.`;
+const SETUP_MIN = 60, FLIP_MIN = 75;
+// Setups in Aufträge übersetzen: pro Coin die bessere Seite, ab 60 Punkten, Chance mindestens 1,5× Risiko
+function setupOrders(out, K, P) {
+  const orders = [], seen = [];
+  for (const c of COINS) { const o = out.coins && out.coins[c]; if (!o || !P[c]) continue;
+    const L = o.long || {}, Sh = o.short || {}, lp = +L.punkte || 0, sp = +Sh.punkte || 0;
+    const best = lp >= sp ? ['long', L, lp, sp] : ['short', Sh, sp, lp]; const [side, st, pts, other] = best;
+    seen.push(`${c} L${lp}/S${sp}`);
+    if (pts < SETUP_MIN || pts < other + 10) continue;
+    const cur = K.pos[c], sd = side === 'long' ? 1 : -1;
+    if (cur && cur.side === sd) continue;
+    if (cur && pts < FLIP_MIN) continue;
+    const px = P[c], sl = +st.stop, tp = +st.ziel;
+    if (sl > 0 && tp > 0 && (sd > 0 ? sl < px && tp > px : sl > px && tp < px) && Math.abs(tp - px) < 1.5 * Math.abs(px - sl)) { orders.push({ skip: `${c} ${side}: Ziel zu nah am Stop (Chance < 1,5× Risiko)` }); continue; }
+    orders.push({ coin: c, aktion: side, hebel: st.hebel, einsatz: st.einsatz, stop: st.stop, ziel: st.ziel, sicherheit: pts, grund: `Setup ${pts} Punkte: ${String(st.grund || '').slice(0, 300)}` });
+  }
+  return { orders, seen };
+}
 
 export async function kiStep(env, S, getJSON, now) {
   const slot = Math.floor(now / 7200e3);
@@ -186,7 +210,7 @@ async function decide(env, S, X, now, alarm) {
       const pend = !alarm && S.alarm && S.alarm.pending ? `Seit deiner letzten Abwägung ist passiert: ${S.alarm.pending}\n\n` : '';
       if (pend) { S.alarm.pending = ''; S.alarm.pendT = 0; }
       const head = pend + (alarm ? `⚡ ALARM – darum wirst du außerhalb der Reihe gefragt: ${alarm}\nPrüfe, ob du jetzt handeln musst (einsteigen, aussteigen, Stop anpassen) oder ob es nur Lärm ist. Die Technik-Daten sind frisch, Derivate/Makro sind von ${X.at ? new Date(X.at).toISOString().slice(11, 16) : 'vorhin'} UTC.\n\n` : '');
-      const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'system', content: SYS }, { role: 'user', content: head + prompt(X, S, K, P, N, news, now) + FORMAT }], max_tokens: 2200, temperature: 0.25 });
+      const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', { messages: [{ role: 'system', content: SYS }, { role: 'user', content: head + prompt(X, S, K, P, N, news, now) + FORMAT }], max_tokens: 3000, temperature: 0.3 });
       raw = typeof r.response === 'string' ? r.response : JSON.stringify(r.response);
       out = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
     } catch (e) { out = null; raw = String(e).slice(0, 300) + ' ' + raw.slice(0, 300); }
@@ -197,13 +221,16 @@ async function decide(env, S, X, now, alarm) {
     fc.faktoren = (out.faktoren || []).slice(0, 12).map(f => ({ name: String(f.name || '').slice(0, 80), wirkung: String(f.wirkung || 'neutral'), warum: String(f.warum || '').slice(0, 200) }));
     fc.risiken = (out.risiken || []).slice(0, 5).map(s => String(s).slice(0, 240));
     for (const c of COINS) { const o = out.coins && out.coins[c]; if (!o) continue; const dir = /steig/i.test(o.richtung) ? 'steigt' : /f[äa]ll/i.test(o.richtung) ? 'fällt' : 'seitwärts';
-      fc.coins[c] = { richtung: dir, sicherheit: Math.max(0, Math.min(100, Math.round(+o.sicherheit || 0))), gruende: (o.gruende || []).slice(0, 4).map(s => String(s).replace(/^\s*\(?Schlagzeile\s*\[?\d+\]?\)?\s*:?\s*/i, '').slice(0, 240)),
+      const sx = x => x ? { punkte: Math.max(0, Math.min(100, Math.round(+x.punkte || 0))), stop: +x.stop || null, ziel: +x.ziel || null, hebel: +x.hebel || null, grund: String(x.grund || '').slice(0, 200) } : null;
+      fc.coins[c] = { setups: { long: sx(o.long), short: sx(o.short) }, richtung: dir, sicherheit: Math.max(0, Math.min(100, Math.round(+o.sicherheit || 0))), gruende: (o.gruende || []).slice(0, 4).map(s => String(s).replace(/^\s*\(?Schlagzeile\s*\[?\d+\]?\)?\s*:?\s*/i, '').slice(0, 240)),
         news: (o.news || []).map(i => news[+i]).filter(Boolean).slice(0, 3).map(n => n.title), px: P[c], tech: X.tech && X.tech[c] ? { ch1: X.tech[c].h24, ch7: X.tech[c].d7, rsi: X.tech[c].rsiTag, trend: X.tech[c].trendTag } : null }; }
     const cr = Math.max(0, Math.min(100, Math.round(+out.crashRisiko || 0)));
     S.risk = { v: cr, gruende: (out.crashGruende || []).slice(0, 5).map(x => String(x).slice(0, 240)), t: now, notfall: out.notfall === true };
     if (out.notfall === true) await crashAction(env, S, now, 3, 'KI meldet Notfall: ' + (S.risk.gruende[0] || fc.markt.slice(0, 160)));
     else if (cr >= 75) await crashAction(env, S, now, 2, `KI schätzt das Crash-Risiko auf ${cr} %: ${S.risk.gruende[0] || ''}`);
-    const decs = Array.isArray(out.entscheidungen) ? out.entscheidungen.slice(0, 6) : [];
+    const decs = (Array.isArray(out.entscheidungen) ? out.entscheidungen.slice(0, 6) : []).filter(d => K.pos[String(d.coin || '').toUpperCase()]);
+    const so = setupOrders(out, K, P); for (const o of so.orders) { if (o.skip) notes.push(o.skip); else decs.push(o); }
+    notes.push('Punkte (Long/Short): ' + so.seen.join(' · '));
     const before = JSON.stringify(Object.keys(K.pos).map(c => c + K.pos[c].side));
     for (const d of decs) execute(K, d, P, X.tech || {}, now, notes);
     const tr = notes.filter(x => /LONG|SHORT|geschlossen/.test(x));

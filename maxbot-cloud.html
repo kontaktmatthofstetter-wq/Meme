@@ -118,6 +118,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 
   <div class="card" id="newsCard">
     <h2>🔮 Prognosen je Coin (nächste 24 Stunden)</h2>
+    <div class="sub">Für jeden Coin bewertet die KI ein Long- und ein Short-Setup mit 0–100 Punkten. Ab 60 Punkten (✓) handelt sie automatisch – wenn das Ziel mindestens 1,5-mal so weit weg ist wie der Stop.</div>
     <div class="sub" id="nMeta">Lade Analyse…</div>
     <p id="nMarkt" style="margin:8px 0 12px"></p>
     <div class="fc" id="nCoins"></div>
@@ -246,7 +247,7 @@ function renderN(){if(S)renderKI();renderDat();const f=NW.fc,ago=Math.round((Dat
   $('nCoins').innerHTML=COINS.filter(c=>f.coins[c]).map(c=>{const o=f.coins[c],d=DIR[o.richtung]||DIR['seitwärts'],t=o.tech||{};
     return`<div class="fcc"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">${c}</b><span class="dir" style="color:${d[1]}">${d[0]} ${d[2]}</span></div>
     <div class="sub">Preis ${o.px?px(o.px):'–'} · 24h ${t.ch1!=null?(t.ch1>=0?'+':'')+String(t.ch1).replace('.',',')+' %':'–'} · 7 Tage ${t.ch7!=null?(t.ch7>=0?'+':'')+String(t.ch7).replace('.',',')+' %':'–'} · RSI ${t.rsi??'–'}</div>
-    <div class="conf"><i style="width:${o.sicherheit}%;background:${d[1]}"></i></div><div class="sub">Sicherheit: ${o.sicherheit} %</div>
+    <div class="conf"><i style="width:${o.sicherheit}%;background:${d[1]}"></i></div><div class="sub">Sicherheit: ${o.sicherheit} %</div>${o.setups?`<div style="display:flex;gap:6px;margin-top:6px">${[['long','Long','var(--up)'],['short','Short','var(--down)']].map(([k,n,col])=>{const x=o.setups[k];if(!x)return'';const hot=x.punkte>=60;return`<span class="chip" title="${esc(x.grund)}" style="border-color:${hot?col:'#333'};color:${hot?col:'var(--mute)'}">${n} ${x.punkte}${hot?' ✓':''}</span>`}).join('')}</div>`:''}
     <ul>${(o.gruende||[]).map(g=>`<li>${esc(g)}</li>`).join('')}</ul>${o.news&&o.news.length?`<div class="hl">📰 ${o.news.map(esc).join('<br>📰 ')}</div>`:''}</div>`}).join('');
   $('nRisk').innerHTML=f.risiken&&f.risiken.length?`<div class="card" style="background:var(--card2)"><h2>⚠️ Was die Prognose kippen könnte</h2><ul style="margin:0;padding-left:18px;font-size:13px">${f.risiken.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>`:'';
   const st=NW.stats||{},all=st.all;
