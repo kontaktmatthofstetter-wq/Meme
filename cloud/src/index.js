@@ -93,7 +93,7 @@ export async function run(env, now = Date.now()) {
       const nm = E.VARS[e.v] ? E.VARS[e.v].n : e.v;
       lines.push(e.io === 'in' ? `${e.c} ${e.side > 0 ? 'LONG' : 'SHORT'} @ ${f(e.px)}${e.lev && e.lev !== 1 ? ' · Hebel ' + e.lev.toFixed(1) + 'x' : ''} (${nm}) – ${e.why}`
         : `${e.c} raus @ ${f(e.px)} (${nm}) · ${e.pct >= 0 ? '+' : ''}${e.pct.toFixed(1)} % – ${e.why}`); }
-    if (lines.length) await push(env, 'Regel-Bot: Trade', lines.slice(0, 8).join('\n'), 3, 'robot');
+    // Regel-Bot läuft nur noch unsichtbar als Datenquelle für die KI – keine Nachrichten mehr
     const kl = (S.ki ? S.ki.closed : []).filter(t => t.t > kc0 && /Stop|Ziel|Liquid|Crash/.test(t.why));
     if (kl.length) await push(env, 'KI-Trader: Trade geschlossen', kl.map(t => `${t.c} ${t.side > 0 ? 'Long' : 'Short'} ${t.lev}x: ${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} € (${t.pct >= 0 ? '+' : ''}${t.pct} %) – ${t.why}`).join('\n'), 3, kl.some(t => t.pnl < 0) ? 'red_circle' : 'green_circle');
   } catch (e) { }
@@ -135,6 +135,12 @@ export default {
       return new Response(await env.STATE.get('clog') || '[]', { headers: CORS });
     }
     if (req.method === 'OPTIONS') return new Response(null, { headers: { ...CORS, 'access-control-allow-methods': 'GET,POST', 'access-control-allow-headers': 'content-type' } });
+    if (u.pathname === '/api/summary') {   // klein und schnell: für das Widget auf dem Home-Bildschirm
+      const S = JSON.parse(await env.STATE.get('state') || 'null'); if (!S || !S.ki) return new Response('{}', { headers: CORS });
+      const K = S.ki, eq = K.eq || 1000, h = K.eqH || [], day = Date.now() - 864e5; let e24 = h.length ? h[0][1] : 1000; for (const [t, v] of h) if (t <= day) e24 = v;
+      const pos = Object.entries(K.pos).map(([c, p]) => ({ c, side: p.side > 0 ? 'Long' : 'Short', lev: p.lev }));
+      return new Response(JSON.stringify({ eq, start: K.start || 1000, gewinn: +(eq - (K.start || 1000)).toFixed(2), pct: +((eq / (K.start || 1000) - 1) * 100).toFixed(2), heute: +(eq - e24).toFixed(2), pos, trades: K.n || 0, win: K.win || 0, at: S.lastRun, crash: S.crash && S.crash.lvl && Date.now() - (S.crash.t || 0) < 6 * 3600e3 ? S.crash.lvl : 0 }), { headers: CORS });
+    }
     if (u.pathname === '/api/news') { const s = await env.STATE.get('news'); return new Response(s || '{}', { headers: CORS }); }
     if (u.pathname === '/api/k') {   // Kerzen für die Seite (falls Binance im Browser nicht lädt)
       const c = u.searchParams.get('c'), iv = ['1h', '4h', '1d'].includes(u.searchParams.get('i')) ? u.searchParams.get('i') : '4h', n = Math.max(20, Math.min(1000, +u.searchParams.get('n') || 120)); if (!COINS.includes(c)) return new Response('[]', { status: 400, headers: CORS });

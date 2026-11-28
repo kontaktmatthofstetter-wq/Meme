@@ -2,7 +2,6 @@ name: Max-Bot auf Cloudflare veröffentlichen
 on:
   push:
     branches: [main]
-    paths: ['cloud/**', '.github/workflows/deploy-maxbot.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -20,6 +19,7 @@ jobs:
         working-directory: cloud
         run: |
           npm i -g wrangler@4 >/dev/null 2>&1
+          rm -rf public && mkdir -p public/icons && cp ../*.html ../manifest-ki.json public/ && cp ../icons/*.png public/icons/ && ls public
           findkv() { wrangler kv namespace list 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const n=JSON.parse(s).find(x=>x.title==='maxbot-state');console.log(n?n.id:'')}catch(e){console.log('')}})"; }
           ID=$(findkv)
           if [ -z "$ID" ]; then wrangler kv namespace create maxbot-state; ID=$(findkv); fi

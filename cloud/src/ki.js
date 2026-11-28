@@ -260,7 +260,7 @@ export async function crashAction(env, S, now, lvl, why) {
   if (lvl >= 3) {
     let n = 0; for (const c in { ...K.pos }) { const p = K.pos[c]; if (p.side > 0) { closeKI(K, c, 'Crash-Schutz', P[c] || p.entry, now); n++; } else if (P[c] < p.entry) p.sl = Math.min(p.sl, p.entry); }
     K.blockLong = now + 12 * 3600e3; const m = S.crashRegel ? emergency(S, now, why, 12) : 0;
-    txt = `KI-Trader: ${n} Long-Positionen geschlossen, Shorts mit Stop auf Einstieg abgesichert, 12 Stunden keine neuen Longs.` + (S.crashRegel ? ` Regel-Bot: ${m} Longs geschlossen.` : ' Regel-Bot: nur gewarnt (im Rückblick hat Zwangsverkaufen ihm geschadet), seine Stops schützen ihn.');
+    txt = `KI-Trader: ${n} Long-Positionen geschlossen, Shorts mit Stop auf Einstieg abgesichert, 12 Stunden keine neuen Longs.`;
     await push(env, 'CRASH-SCHUTZ AKTIV', `${why}\n\n${txt}`, 5, 'rotating_light');
   } else {
     let n = 0; for (const c in K.pos) { const p = K.pos[c]; if (p.side > 0 && P[c]) { const ns = P[c] * 0.985; if (ns > p.sl) { p.sl = ns; n++; } } }

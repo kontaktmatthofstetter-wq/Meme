@@ -13,3 +13,7 @@ id = "6c41d066dd114c3396043c9e34ee31f1"
 
 [ai]
 binding = "AI"
+
+# Die Seiten (ohne Bot-Code) direkt vom Cloud-Bot ausliefern – GitHub kann dann privat sein
+[assets]
+directory = "./public"   # wird beim Hochladen aus den Seiten zusammengestellt
