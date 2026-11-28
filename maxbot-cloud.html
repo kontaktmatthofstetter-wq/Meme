@@ -336,7 +336,7 @@ async function pull(){try{
 }catch(e){__rep('pull: '+(e&&e.stack||e));st('err','Cloud gerade nicht erreichbar – neuer Versuch…')}}
 function st(c,t){$('dot').className='dot '+c;$('st').textContent=t}
 pull().then(()=>{loadPush();return loadK(coin)}).then(()=>{render();drawK()});pullN();setInterval(pullN,300000);setInterval(pull,30000);setInterval(()=>{loadPx().then(render)},15000);setInterval(()=>{if(K[coin+TF]==='err')delete K[coin+TF];loadK(coin).then(drawK)},120000);
-new ResizeObserver(()=>{if(S){drawK();drawEq()}}).observe(document.body);
+new ResizeObserver(()=>{if(S){try{drawK();drawCmp()}catch(e){}}}).observe(document.body);
 })();
 </script>
 </body>
